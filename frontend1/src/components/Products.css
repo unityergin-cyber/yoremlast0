@@ -1,0 +1,561 @@
+.products-container {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.products-title {
+  font-size: 2rem;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.products-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.product-item {
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 15px;
+  width: 300px;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.product-item h2 {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+}
+
+.product-item p {
+  margin: 5px 0;
+}
+
+.order-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.order-btn:hover {
+  background-color: #218838;
+}
+
+.loading {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.error {
+  text-align: center;
+  color: red;
+  margin-bottom: 15px;
+}
+
+.no-data {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+/* =========================
+   ADMIN ÜRÜN EKLE SAYFASI (apw-*)
+   ========================= */
+
+.admin-products-page {
+  min-height: 100vh;
+  background-color: #f3f6fb;
+  font-family: "Poppins", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #111827;
+}
+
+/* Beyaz tema varyasyonu */
+.ap-white {
+  background-color: #f3f6fb;
+}
+
+/* Üst sabit header */
+.apw-header {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg, #0152a4, #012f5e);
+  padding: 14px 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.18);
+  box-sizing: border-box;
+}
+
+.apw-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-inline: 12px;
+  flex: 1;
+}
+
+.apw-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.apw-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Header menü butonu */
+.apw-menu-btn {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Header sağ aksiyonlar */
+.apw-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Ana içerik alanı */
+.apw-main {
+  box-sizing: border-box;
+  padding: 100px 24px 24px; /* header için üstten boşluk */
+  transition: margin-left 0.25s ease;
+}
+
+/* Sidebar açıkken masaüstünde sola boşluk bırak */
+@media (min-width: 1024px) {
+  .apw-main.sidebar-open {
+    margin-left: 260px; /* Sidebar genişliğine göre ayarla */
+  }
+
+  .apw-main.sidebar-closed {
+    margin-left: 72px; /* Eğer collapsed bir sidebar'ın varsa */
+  }
+}
+
+/* Sidebar mobilde overlay ise boşluk bırakma */
+@media (max-width: 1023.98px) {
+  .apw-main.sidebar-open,
+  .apw-main.sidebar-closed {
+    margin-left: 0;
+  }
+}
+
+.apw-container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.apw-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  padding: 24px 24px 28px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-sizing: border-box;
+}
+
+/* Form genel */
+.apw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Grid yapıları */
+.apw-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.apw-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.apw-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .apw-grid-2,
+  .apw-grid-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Form field / label / input */
+.apw-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.apw-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.apw-req {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.apw-input,
+.apw-textarea,
+.apw-file,
+.apw-select {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 9px 11px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  background-color: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.apw-input:focus,
+.apw-textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
+}
+
+.apw-input::placeholder,
+.apw-textarea::placeholder {
+  color: #9ca3af;
+}
+
+.apw-textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+/* Input + suffix (TL) */
+.apw-input-suffix {
+  display: flex;
+  align-items: stretch;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.apw-input-suffix .apw-input {
+  border-radius: 8px 0 0 8px;
+  border-right: none;
+}
+
+.apw-suffix {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  font-size: 0.85rem;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  white-space: nowrap;
+}
+
+/* Upload alanı */
+.apw-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.apw-file {
+  padding: 6px 8px;
+  font-size: 0.85rem;
+}
+
+.apw-upload-box {
+  border-radius: 8px;
+  border: 1px dashed #9ca3af;
+  padding: 10px 12px;
+  background-color: #f9fafb;
+}
+
+.apw-upload-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.apw-upload-hint {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Görsel önizleme */
+.apw-preview {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.apw-preview img {
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid #e5e7eb;
+}
+
+/* Blok başlıkları (Seçenekler / Malzemeler) */
+.apw-block {
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 14px 14px 16px;
+  background-color: #f9fafb;
+}
+
+.apw-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.apw-block-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.apw-block-desc {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Satır içi form elemanları (seçenek/malzeme ekle) */
+.apw-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .apw-inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .apw-inline .apw-input-suffix {
+    width: 100%;
+  }
+}
+
+/* Checkbox */
+.apw-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #374151;
+}
+
+/* Chip listesi (seçenek / malzeme) */
+.apw-chips {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.apw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background-color: #e5e7eb;
+  font-size: 0.8rem;
+}
+
+.apw-chip.is-default {
+  background-color: #dbeafe;
+  border: 1px solid #2563eb;
+}
+
+.apw-chip-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.apw-chip-title {
+  font-weight: 500;
+  color: #111827;
+}
+
+.apw-chip-meta {
+  font-size: 0.75rem;
+  color: #374151;
+}
+
+.apw-chip-x {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #4b5563;
+  padding: 0 2px;
+}
+
+/* Butonlar */
+.apw-btn {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 0.15s ease, color 0.15s ease,
+    border-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+  font-family: inherit;
+}
+
+.apw-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* ürünü ekle Ana buton */
+.apw-btn-primary {
+  background-color: #38bdf8; /* Açık mavi (sky-400) */
+  color: #0b0b0b;
+  border-color: #38bdf8;
+}
+
+.apw-btn-primary:hover:not(:disabled) {
+  background-color: #36d463; /* Biraz daha koyu mavi hover */
+  border-color: #36d463; 
+}
+
+/* ekle butonları */
+.apw-btn-dark {
+  background-color: #0ea5e9;
+  color: #ffffff;
+  border-color: #0ea5e9;
+}
+
+.apw-btn-dark:hover:not(:disabled) {
+  background-color: #38bdf8;
+}
+
+/* Ghost buton */
+.apw-btn-ghost {
+  background-color: #0ea5e9;;
+  color: rgb(22, 21, 21); /* Açık mavi text */
+  border-color: #38bdf8; /* Açık mavi border */
+}
+
+.apw-btn-ghost:hover:not(:disabled) {
+  background-color: red; /* Çok açık mavi arka plan */
+  color: white;
+  border-color: red;
+}
+
+/* Ghost hata tonu */
+.apw-btn-ghost-danger {
+  background-color: transparent;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.apw-btn-ghost-danger:hover:not(:disabled) {
+  background-color: #fef2f2;
+}
+
+/* Alert kutuları */
+.apw-alert {
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+
+.apw-alert-error {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.apw-alert-success {
+  background-color: #ecfdf5;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+/* Alt aksiyonlar */
+.apw-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Küçük ekran düzenlemeleri */
+@media (max-width: 640px) {
+  .apw-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .apw-header-text {
+    margin-inline: 0;
+  }
+
+  .apw-card {
+    padding: 18px 14px 20px;
+  }
+
+  .apw-main {
+    padding-inline: 12px;
+  }
+
+  .apw-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .apw-actions .apw-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
