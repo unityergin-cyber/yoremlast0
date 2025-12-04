@@ -15,7 +15,7 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
   const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
   const [isWorkingHoursDropdownOpen, setIsWorkingHoursDropdownOpen] = useState(false);
-  const [isSettingsDropdownOpen, setIsSettingsDropdownOpen] = useState(false);
+
   const navigate = useNavigate();
   const { logout } = useContext(AuthContext);
 
@@ -31,9 +31,7 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
     setIsWorkingHoursDropdownOpen(!isWorkingHoursDropdownOpen);
   };
 
-  const toggleSettingsDropdown = () => {
-    setIsSettingsDropdownOpen(!isSettingsDropdownOpen);
-  };
+
 
   const handleLogoutClick = (e) => {
     e.preventDefault();
@@ -162,41 +160,7 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
             </div>
           </li>
 
-          <li className="dropdown">
-            <div className="dropdown-toggle" onClick={toggleSettingsDropdown}>
-              <FaCog className="menu-icon" />
-              <span className="menu-text">Ayarlar</span>
-              <FaAngleDown className={`dropdown-arrow ${isSettingsDropdownOpen ? "open" : ""}`} />
-            </div>
-            <div className={`dropdown-menu-container ${isSettingsDropdownOpen ? "open" : ""}`}>
-              <ul className="dropdown-menu">
-                <li>
-                  <NavLink
-                    to="/admin/settings/general"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                  >
-                    <span className="menu-text">Genel Ayarlar</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink
-                    to="/admin/settings/payment"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                  >
-                    <span className="menu-text">Ödeme Ayarları</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink
-                    to="/admin/settings/notification"
-                    className={({ isActive }) => (isActive ? "active" : "")}
-                  >
-                    <span className="menu-text">Bildirim Ayarları</span>
-                  </NavLink>
-                </li>
-              </ul>
-            </div>
-          </li>
+
 
           <li>
             <button

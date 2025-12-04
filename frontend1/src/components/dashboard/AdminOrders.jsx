@@ -10,7 +10,7 @@ import {
   FaPrint,
   FaSyncAlt
 } from "react-icons/fa";
-import Sidebar from "./Sidebar";
+import Sidebar from "./SideBar";
 import "./Orders.css";
 
 const AdminOrders = () => {
@@ -329,6 +329,12 @@ const AdminOrders = () => {
                           >
                             <FaEdit />
                           </button>
+                          <button
+                            className="action-btn delete-btn"
+                            onClick={() => handleDelete(order.id)}
+                          >
+                            <FaTrash />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -398,6 +404,12 @@ const AdminOrders = () => {
                 onClick={handleOpenStatusModal}
               >
                 <FaSyncAlt /> Durumu Güncelle
+              </button>
+              <button
+                className="action-bar-btn delete-btn"
+                onClick={() => handleDelete(selectedOrder.id)}
+              >
+                <FaTrash /> Sil
               </button>
             </div>
           </div>

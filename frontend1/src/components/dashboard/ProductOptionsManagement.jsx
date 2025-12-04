@@ -13,12 +13,12 @@ import {
   Space,
   Popconfirm,
   Drawer,
-  Transfer,
   Switch,
   Typography,
-  Divider
+  Divider,
+  InputNumber,
 } from 'antd';
-import Sidebar from "./Sidebar";
+import Sidebar from "./SideBar";
 import "./Orders.css";
 
 const { Option } = Select;
@@ -27,134 +27,183 @@ const { Text } = Typography;
 const ProductOptionsManagement = () => {
   const { admin } = useContext(AuthContext);
   const navigate = useNavigate();
+  
+  // STATE
   const [options, setOptions] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Modal - Seçenek ekleme/düzenleme
+  const [optionModalVisible, setOptionModalVisible] = useState(false);
+  const [editingOption, setEditingOption] = useState(null);
+  const [optionForm] = Form.useForm();
+  
+  // Modal - Değer ekleme/düzenleme
+  const [valueModalVisible, setValueModalVisible] = useState(false);
+  const [editingValue, setEditingValue] = useState(null);
+  const [selectedOptionForValue, setSelectedOptionForValue] = useState(null);
+  const [valueForm] = Form.useForm();
+  
+  // Drawer - Ürüne seçenek atama
   const [assignDrawerVisible, setAssignDrawerVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedProductOptions, setSelectedProductOptions] = useState([]);
   const [selectedRequiredOptions, setSelectedRequiredOptions] = useState([]);
-  const [editingOption, setEditingOption] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [form] = Form.useForm();
 
-  // Sidebar responsive kontrolü
+  // Sidebar responsive
   useEffect(() => {
-    const handleResize = () => {
-      setIsSidebarOpen(window.innerWidth > 1024);
-    };
+    const handleResize = () => setIsSidebarOpen(window.innerWidth > 1024);
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
-    if (!admin) {
-      navigate("/admin/login");
-    }
+    if (!admin) navigate("/admin/login");
   }, [admin, navigate]);
 
-  // Seçenekleri getir
+  // Veri çekme
+  useEffect(() => {
+    fetchOptions();
+    fetchProducts();
+  }, []);
+
   const fetchOptions = async () => {
     setLoading(true);
     try {
       const response = await api.get('/api/options');
       setOptions(response.data);
     } catch (error) {
+      console.error('Options fetch error:', error);
       message.error('Seçenekler yüklenirken bir hata oluştu');
     }
     setLoading(false);
   };
 
-  // Ürünleri getir
   const fetchProducts = async () => {
     try {
       const response = await api.get('/api/products');
-      setProducts(response.data.data);
+      setProducts(response.data.data || []);
     } catch (error) {
+      console.error('Products fetch error:', error);
       message.error('Ürünler yüklenirken bir hata oluştu');
     }
   };
 
-  useEffect(() => {
-    fetchOptions();
-    fetchProducts();
-  }, []);
+  // ==================== SEÇENEKLERİ YÖNET ====================
 
-  // Yeni seçenek ekle
-  const handleAdd = () => {
+  const handleAddOption = () => {
     setEditingOption(null);
-    form.resetFields();
-    setModalVisible(true);
+    optionForm.resetFields();
+    setOptionModalVisible(true);
   };
 
-  // Seçenek düzenle
-  const handleEdit = (record) => {
+  const handleEditOption = (record) => {
     setEditingOption(record);
-    form.setFieldsValue({
+    optionForm.setFieldsValue({
       name: record.name,
       description: record.description,
-      type: record.type
+      type: record.type,
     });
-    setModalVisible(true);
+    setOptionModalVisible(true);
   };
 
-  // Form gönderme
-  const handleSubmit = async (values) => {
+  const handleSubmitOption = async (values) => {
     try {
       if (editingOption) {
-        // Düzenleme işlemi
         await api.put(`/api/options/${editingOption.id}`, values);
         message.success('Seçenek başarıyla güncellendi');
       } else {
-        // Yeni ekleme işlemi
         await api.post('/api/options', values);
         message.success('Seçenek başarıyla eklendi');
       }
-      setModalVisible(false);
-      setEditingOption(null);
-      form.resetFields();
+      setOptionModalVisible(false);
       fetchOptions();
     } catch (error) {
-      message.error(editingOption ? 'Seçenek güncellenirken bir hata oluştu' : 'Seçenek eklenirken bir hata oluştu');
+      console.error('Option submit error:', error);
+      message.error(editingOption ? 'Güncelleme başarısız' : 'Ekleme başarısız');
     }
   };
 
-  // Seçenek silme
-  const handleDelete = async (id) => {
+  const handleDeleteOption = async (id) => {
     try {
       await api.delete(`/api/options/${id}`);
       message.success('Seçenek başarıyla silindi');
       fetchOptions();
     } catch (error) {
-      message.error('Seçenek silinirken bir hata oluştu');
+      console.error('Option delete error:', error);
+      message.error('Silme başarısız');
     }
   };
 
-  // Ürüne seçenek atama penceresini aç
+  // ==================== DEĞERLERI YÖNET ====================
+
+  const handleAddValue = (optionId) => {
+    setSelectedOptionForValue(optionId);
+    setEditingValue(null);
+    valueForm.resetFields();
+    setValueModalVisible(true);
+  };
+
+  const handleEditValue = (optionId, value) => {
+    setSelectedOptionForValue(optionId);
+    setEditingValue(value);
+    valueForm.setFieldsValue({
+      name: value.name,
+      price_modifier: value.price_modifier,
+    });
+    setValueModalVisible(true);
+  };
+
+  const handleSubmitValue = async (values) => {
+    try {
+      if (editingValue) {
+        await api.put(`/api/options/values/${editingValue.id}`, values);
+        message.success('Değer başarıyla güncellendi');
+      } else {
+        await api.post(`/api/options/${selectedOptionForValue}/values`, values);
+        message.success('Değer başarıyla eklendi');
+      }
+      setValueModalVisible(false);
+      fetchOptions();
+    } catch (error) {
+      console.error('Value submit error:', error);
+      message.error(editingValue ? 'Güncelleme başarısız' : 'Ekleme başarısız');
+    }
+  };
+
+  const handleDeleteValue = async (valueId) => {
+    try {
+      await api.delete(`/api/options/values/${valueId}`);
+      message.success('Değer başarıyla silindi');
+      fetchOptions();
+    } catch (error) {
+      console.error('Value delete error:', error);
+      message.error('Silme başarısız');
+    }
+  };
+
+  // ==================== ÜRÜNE SEÇENEK ATA ====================
+
   const showAssignDrawer = async (productId) => {
     if (productId) {
       setSelectedProduct(productId);
       try {
-        const response = await api.get(`/api/products/${productId}/options`);
-        const productOptions = response.data;
-        setSelectedProductOptions(productOptions.map(po => po.id.toString()));
-        setSelectedRequiredOptions(productOptions.filter(po => po.is_required).map(po => po.id.toString()));
+        // ✅ DÜZELTİLMİŞ ENDPOINT
+        const response = await api.get(`/api/options/product/${productId}`);
+        const productOpts = response.data;
+        setSelectedProductOptions(productOpts.map(po => po.id.toString()));
+        setSelectedRequiredOptions(productOpts.filter(po => po.is_required).map(po => po.id.toString()));
       } catch (error) {
-        message.error('Ürün seçenekleri yüklenirken bir hata oluştu');
+        console.error('Product options fetch error:', error);
         setSelectedProductOptions([]);
         setSelectedRequiredOptions([]);
       }
-    } else {
-      setSelectedProduct(null);
-      setSelectedProductOptions([]);
-      setSelectedRequiredOptions([]);
     }
     setAssignDrawerVisible(true);
   };
 
-  // Drawer'ı açan buton için handler
   const handleOpenDrawer = () => {
     setSelectedProduct(null);
     setSelectedProductOptions([]);
@@ -162,60 +211,114 @@ const ProductOptionsManagement = () => {
     setAssignDrawerVisible(true);
   };
 
-  // Seçenekleri ürüne kaydet
   const handleAssignOptions = async () => {
+    if (!selectedProduct) {
+      message.warning('Lütfen bir ürün seçin');
+      return;
+    }
+
     try {
-      await api.post(`/api/products/${selectedProduct}/options`, {
+      // ✅ DÜZELTİLMİŞ ENDPOINT
+      await api.post(`/api/options/product/${selectedProduct}/assign`, {
         options: selectedProductOptions.map(optionId => ({
           option_id: parseInt(optionId),
-          is_required: selectedRequiredOptions.includes(optionId)
-        }))
+          is_required: selectedRequiredOptions.includes(optionId),
+        })),
       });
       message.success('Seçenekler başarıyla atandı');
       setAssignDrawerVisible(false);
     } catch (error) {
-      message.error('Seçenekler atanırken bir hata oluştu');
+      console.error('Assign options error:', error);
+      message.error('Atama başarısız: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  const columns = [
+  // ==================== RENDER ====================
+
+  const optionColumns = [
     {
       title: 'Seçenek Adı',
       dataIndex: 'name',
       key: 'name',
-    },
-    {
-      title: 'Açıklama',
-      dataIndex: 'description',
-      key: 'description',
+      width: '20%',
     },
     {
       title: 'Tür',
       dataIndex: 'type',
       key: 'type',
+      width: '15%',
       render: (type) => type === 'single' ? 'Tekli Seçim' : 'Çoklu Seçim',
     },
     {
-      title: 'Durum',
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (is_active) => (is_active ? 'Aktif' : 'Pasif'),
+      title: 'Değerler',
+      key: 'values',
+      width: '50%',
+      render: (_, record) => (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {record.values && record.values.length > 0 ? (
+            record.values.map(val => (
+              <div key={val.id} style={{
+                background: '#f0f0f0',
+                padding: '4px 12px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>{val.name} (+{parseFloat(val.price_modifier).toFixed(2)} TL)</span>
+                <Space size={4}>
+                  <Button 
+                    type="link" 
+                    size="small" 
+                    style={{ padding: 0, height: 'auto' }}
+                    onClick={() => handleEditValue(record.id, val)}
+                  >
+                    Düzenle
+                  </Button>
+                  <Popconfirm
+                    title="Değeri silmek istediğinizden emin misiniz?"
+                    onConfirm={() => handleDeleteValue(val.id)}
+                    okText="Evet"
+                    cancelText="Hayır"
+                  >
+                    <Button 
+                      type="link" 
+                      danger 
+                      size="small"
+                      style={{ padding: 0, height: 'auto' }}
+                    >
+                      Sil
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              </div>
+            ))
+          ) : (
+            <span style={{ color: '#999' }}>Değer yok</span>
+          )}
+        </div>
+      ),
     },
     {
       title: 'İşlemler',
       key: 'action',
+      width: '15%',
       render: (_, record) => (
-        <Space size="middle">
-          <Button type="primary" onClick={() => handleEdit(record)}>
+        <Space size="small" direction="vertical">
+          <Button type="link" size="small" onClick={() => handleAddValue(record.id)}>
+            Değer Ekle
+          </Button>
+          <Button type="link" size="small" onClick={() => handleEditOption(record)}>
             Düzenle
           </Button>
           <Popconfirm
-            title="Bu seçeneği silmek istediğinizden emin misiniz?"
-            onConfirm={() => handleDelete(record.id)}
+            title="Seçeneği silmek istediğinizden emin misiniz?"
+            onConfirm={() => handleDeleteOption(record.id)}
             okText="Evet"
             cancelText="Hayır"
           >
-            <Button type="primary" danger>
+            <Button type="link" danger size="small">
               Sil
             </Button>
           </Popconfirm>
@@ -224,46 +327,16 @@ const ProductOptionsManagement = () => {
     },
   ];
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   return (
     <div className="admin-orders">
       <header className="header">
         <button className="menu-toggle" onClick={toggleSidebar}>
-          <svg
-            width="24px"
-            height="24px"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className={isSidebarOpen ? "menu-icon-open" : "menu-icon-closed"}
-          >
-            <path
-              className="line1"
-              d="M4 6H20"
-              stroke="#fff"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              className="line2"
-              d="M4 12H14"
-              stroke="#fff"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              className="line3"
-              d="M4 18H9"
-              stroke="#fff"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+          <svg width="24px" height="24px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 6H20" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 12H14" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 18H9" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
         <h1 className="header-title">Ürün Seçenek Yönetimi</h1>
@@ -272,188 +345,173 @@ const ProductOptionsManagement = () => {
       <aside className={`sidebar ${isSidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-header">
           <h2 className="sidebar-title">Admin</h2>
-          <button className="close-sidebar" onClick={toggleSidebar}>
-            ✕
-          </button>
+          <button className="close-sidebar" onClick={toggleSidebar}>✕</button>
         </div>
-        <Sidebar
-          isSidebarOpen={isSidebarOpen}
-          toggleSidebar={toggleSidebar}
-        />
+        <Sidebar isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
       </aside>
 
       <main className={`main-content ${isSidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
         <section className="orders-section">
           <div className="filters">
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-              <Button type="primary" onClick={handleAdd}>
+            <Space>
+              <Button type="primary" onClick={handleAddOption}>
                 Yeni Seçenek Ekle
               </Button>
               <Button type="primary" onClick={handleOpenDrawer}>
                 Ürüne Seçenek Ata
               </Button>
-            </div>
+            </Space>
           </div>
 
           <div className="table-wrapper">
             <Table
-              columns={columns}
+              columns={optionColumns}
               dataSource={options}
               rowKey="id"
               loading={loading}
+              pagination={{ pageSize: 10 }}
             />
           </div>
 
+          {/* Seçenek Modal */}
           <Modal
-            title={editingOption ? 'Seçenek Düzenle' : 'Yeni Seçenek Ekle'}
-            open={modalVisible}
-            onCancel={() => {
-              setModalVisible(false);
-              setEditingOption(null);
-              form.resetFields();
-            }}
+            title={editingOption ? 'Seçeneği Düzenle' : 'Yeni Seçenek Ekle'}
+            open={optionModalVisible}
+            onCancel={() => setOptionModalVisible(false)}
             footer={null}
           >
-            <Form
-              form={form}
-              onFinish={handleSubmit}
-              layout="vertical"
-              initialValues={editingOption || {}}
-            >
-              <Form.Item
-                name="name"
-                label="Seçenek Adı"
-                rules={[{ required: true, message: 'Lütfen seçenek adını girin' }]}
-              >
-                <Input />
+            <Form form={optionForm} layout="vertical" onFinish={handleSubmitOption}>
+              <Form.Item name="name" label="Seçenek Adı" rules={[{ required: true, message: 'Seçenek adı zorunludur' }]}>
+                <Input placeholder="Örn: Boyut" />
               </Form.Item>
-
-              <Form.Item
-                name="description"
-                label="Açıklama"
-              >
-                <Input.TextArea />
+              <Form.Item name="description" label="Açıklama">
+                <Input.TextArea rows={3} placeholder="Seçenek hakkında kısa açıklama" />
               </Form.Item>
-
-              <Form.Item
-                name="type"
-                label="Tür"
-                rules={[{ required: true, message: 'Lütfen seçenek türünü seçin' }]}
-              >
-                <Select>
+              <Form.Item name="type" label="Tür" rules={[{ required: true, message: 'Tür zorunludur' }]}>
+                <Select placeholder="Seçim türü">
                   <Option value="single">Tekli Seçim</Option>
                   <Option value="multiple">Çoklu Seçim</Option>
                 </Select>
               </Form.Item>
-
-              <Form.Item>
-                <Button type="primary" htmlType="submit">
-                  {editingOption ? 'Güncelle' : 'Kaydet'}
-                </Button>
-              </Form.Item>
+              <Button type="primary" htmlType="submit" block>
+                {editingOption ? 'Güncelle' : 'Ekle'}
+              </Button>
             </Form>
           </Modal>
 
+          {/* Değer Modal */}
+          <Modal
+            title={editingValue ? 'Değeri Düzenle' : 'Yeni Değer Ekle'}
+            open={valueModalVisible}
+            onCancel={() => setValueModalVisible(false)}
+            footer={null}
+          >
+            <Form form={valueForm} layout="vertical" onFinish={handleSubmitValue}>
+              <Form.Item name="name" label="Değer Adı" rules={[{ required: true, message: 'Değer adı zorunludur' }]}>
+                <Input placeholder="Örn: Küçük, Orta, Büyük" />
+              </Form.Item>
+              <Form.Item 
+                name="price_modifier" 
+                label="Fiyat Değiştirici (TL)" 
+                rules={[{ required: true, message: 'Fiyat değiştirici zorunludur' }]}
+              >
+                <InputNumber 
+                  min={0} 
+                  step={0.01} 
+                  precision={2}
+                  style={{ width: '100%' }}
+                  placeholder="0.00"
+                />
+              </Form.Item>
+              <Button type="primary" htmlType="submit" block>
+                {editingValue ? 'Güncelle' : 'Ekle'}
+              </Button>
+            </Form>
+          </Modal>
+
+          {/* Ürüne Seçenek Atama Drawer */}
           <Drawer
             title="Ürüne Seçenek Atama"
             placement="right"
-            width={800}
-            onClose={() => {
-              setAssignDrawerVisible(false);
-              setSelectedProduct(null);
-            }}
+            width={700}
+            onClose={() => setAssignDrawerVisible(false)}
             open={assignDrawerVisible}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingBottom: '60px' }}>
-              <Space direction="vertical" style={{ width: '100%', flex: 1 }} size="large">
-                <div>
-                  <Text strong>Önce bir ürün seçin, ardından seçenekleri atayın.</Text>
-                  <Select
-                    style={{ width: '100%', marginTop: '16px' }}
-                    placeholder="Ürün Seçin"
-                    value={selectedProduct}
-                    onChange={showAssignDrawer}
-                    showSearch
-                    optionFilterProp="children"
-                  >
-                    {products.map(product => (
-                      <Option key={product.id} value={product.id}>{product.name}</Option>
-                    ))}
-                  </Select>
-                </div>
+            <Space direction="vertical" style={{ width: '100%' }} size="large">
+              <div>
+                <Text strong>Ürün Seçin:</Text>
+                <Select
+                  style={{ width: '100%', marginTop: '8px' }}
+                  placeholder="Ürün seçiniz"
+                  value={selectedProduct}
+                  onChange={showAssignDrawer}
+                  showSearch
+                  optionFilterProp="children"
+                  filterOption={(input, option) =>
+                    option.children.toLowerCase().includes(input.toLowerCase())
+                  }
+                >
+                  {products.map(p => (
+                    <Option key={p.id} value={p.id}>{p.name}</Option>
+                  ))}
+                </Select>
+              </div>
 
-                {selectedProduct && (
-                  <>
-                    <Divider />
-                    <div>
-                      <Text strong>Seçenekleri sağ tarafa sürükleyerek ürüne ekleyin.</Text>
-                      <br />
-                      <Text type="secondary">Eklenen seçenekleri zorunlu yapmak için alttaki switch'leri kullanın.</Text>
-                    </div>
-                    
-                    <Transfer
-                      dataSource={options.map(option => ({
-                        key: option.id.toString(),
-                        title: option.name,
-                        description: option.description,
-                        type: option.type
-                      }))}
-                      titles={['Mevcut Seçenekler', 'Ürüne Eklenecek Seçenekler']}
-                      targetKeys={selectedProductOptions}
-                      onChange={setSelectedProductOptions}
-                      render={item => (
-                        <Space direction="vertical" size={0}>
-                          <Text strong>{item.title}</Text>
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
-                            {item.type === 'single' ? 'Tekli Seçim' : 'Çoklu Seçim'}
-                          </Text>
-                        </Space>
-                      )}
-                      listStyle={{
-                        width: 350,
-                        height: 400,
-                      }}
-                    />
-
-                    <Divider>Zorunlu Seçenekler</Divider>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-                      {selectedProductOptions.map(optionId => {
-                        const option = options.find(o => o.id.toString() === optionId);
-                        if (!option) return null;
-                        return (
-                          <div key={optionId} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {selectedProduct && (
+                <>
+                  <Divider />
+                  <div>
+                    <Text strong>Seçenekleri Seçin:</Text>
+                    <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {options.map(opt => (
+                        <div key={opt.id} style={{ border: '1px solid #d9d9d9', padding: '12px', borderRadius: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <strong>{opt.name}</strong>
                             <Switch
-                              checked={selectedRequiredOptions.includes(optionId)}
+                              checked={selectedProductOptions.includes(opt.id.toString())}
                               onChange={(checked) => {
                                 if (checked) {
-                                  setSelectedRequiredOptions([...selectedRequiredOptions, optionId]);
+                                  setSelectedProductOptions([...selectedProductOptions, opt.id.toString()]);
                                 } else {
-                                  setSelectedRequiredOptions(selectedRequiredOptions.filter(id => id !== optionId));
+                                  setSelectedProductOptions(selectedProductOptions.filter(id => id !== opt.id.toString()));
+                                  setSelectedRequiredOptions(selectedRequiredOptions.filter(id => id !== opt.id.toString()));
                                 }
                               }}
                             />
-                            <Text>{option.name}</Text>
                           </div>
-                        );
-                      })}
+                          {selectedProductOptions.includes(opt.id.toString()) && (
+                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Switch
+                                  checked={selectedRequiredOptions.includes(opt.id.toString())}
+                                  onChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedRequiredOptions([...selectedRequiredOptions, opt.id.toString()]);
+                                    } else {
+                                      setSelectedRequiredOptions(selectedRequiredOptions.filter(id => id !== opt.id.toString()));
+                                    }
+                                  }}
+                                />
+                                <span style={{ fontSize: '12px' }}>Zorunlu Seçenek</span>
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  </>
-                )}
-              </Space>
-              {selectedProduct && (
-                <div style={{
-                  position: 'fixed',
-                  bottom: 24,
-                  right: 24,
-                  zIndex: 1000
-                }}>
-                  <Button type="primary" onClick={handleAssignOptions}>
-                    Kaydet
-                  </Button>
-                </div>
+                  </div>
+
+                  <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+                    <Button onClick={() => setAssignDrawerVisible(false)} style={{ flex: 1 }}>
+                      İptal
+                    </Button>
+                    <Button type="primary" onClick={handleAssignOptions} style={{ flex: 1 }}>
+                      Kaydet
+                    </Button>
+                  </div>
+                </>
               )}
-            </div>
+            </Space>
           </Drawer>
         </section>
       </main>
@@ -461,4 +519,4 @@ const ProductOptionsManagement = () => {
   );
 };
 
-export default ProductOptionsManagement; 
+export default ProductOptionsManagement;

@@ -15,13 +15,15 @@ const restaurantHoursRouter = require("./routes/restaurantHoursRoute");
 const sliderRouter = require("./routes/sliderRoute");
 const testRoutes = require("./routes/testRoutes");
 const locationRouter = require("./routes/locationRoute");
-
-// ✅ SADECE BİR KEZ IMPORT EDİN - './routes/settings' kullanın (mevcut dosya)
 const settingsRoutes = require('./routes/settings');
+const optionsRouter = require('./routes/options');
 
 const app = express();
 
-// CORS ayarları
+// ✅ 1. ÖNCE JSON PARSING
+app.use(express.json());
+
+// ✅ 2. SONRA CORS - TÜM ROUTE'LARDAN ÖNCE
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -54,9 +56,6 @@ app.use(
   })
 );
 
-// JSON ayrıştırma
-app.use(express.json());
-
 // Uploads klasörünün varlığını kontrol et ve oluştur
 const fs = require("fs");
 const uploadsDir = path.join(__dirname, "uploads");
@@ -82,9 +81,10 @@ app.get("/api/uploads/check", (req, res) => {
   });
 });
 
-// ✅ ROTALAR - HER BİRİ TEK BİR KEZ
+// ✅ 3. ROTALAR - CORS'TAN SONRA
+app.use("/api/options", optionsRouter); // ✅ İlk sıraya aldık
 app.use("/api/locations", locationRouter);
-app.use("/api/settings", settingsRoutes); // ✅ Sadece bir kez
+app.use("/api/settings", settingsRoutes);
 app.use("/auth", authRoutes);
 app.use("/api/addresses", addressRoute);
 app.use("/api/products", productRouter);

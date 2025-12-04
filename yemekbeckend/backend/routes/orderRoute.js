@@ -16,5 +16,7 @@ router.get("/:id", authAdmin, orderController.getOrderById);
 router.put("/:order_id/status", authAdmin, orderController.updateOrderStatus);
 router.put("/:order_id/cancel", authenticateToken, orderController.cancelOrder);
 router.get("/statuses", authAdmin, orderController.getOrderStatuses); // Yeni eklenen durum listesi endpointi
+router.delete("/:id", authAdmin, orderController.deleteOrder); // Sipariş silme için eklendi
+
 
 module.exports = router;

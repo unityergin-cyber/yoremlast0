@@ -37,137 +37,138 @@ function UserProductDetailScreen({ route, navigation }) {
    const [secilenSecenekler, setSecilenSecenekler] = useState({}); // Seçilen seçenekler
 
    // Ürün bilgilerini API'den çek
-   useEffect(() => {
-      const urunGetir = async () => {
-         try {
-            setYukleniyor(true);
-            setHata(null);
-            
-            console.log(`Ürün detayları çekiliyor: ${API_URL}/api/products/${urunId}`);
-            
-            // Ürün detaylarını çek
-            const productResponse = await fetch(`${API_URL}/api/products/${urunId}`);
-            
-            if (!productResponse.ok) {
-               throw new Error(`Ürünler alınamadı. HTTP Kodu: ${productResponse.status}`);
-            }
-            
-            const productData = await productResponse.json();
-            
-            if (!productData || productData.status !== "success") {
-               throw new Error('Geçersiz ürün veri formatı');
-            }
+ useEffect(() => {
+   const urunGetir = async () => {
+      try {
+         setYukleniyor(true);
+         setHata(null);
+         
+         console.log(`Ürün detayları çekiliyor: ${API_URL}/api/products/${urunId}`);
+         
+         // Ürün detaylarını çek
+         const productResponse = await fetch(`${API_URL}/api/products/${urunId}`);
+         
+         if (!productResponse.ok) {
+            throw new Error(`Ürünler alınamadı. HTTP Kodu: ${productResponse.status}`);
+         }
+         
+         const productData = await productResponse.json();
+         
+         if (!productData || productData.status !== "success") {
+            throw new Error('Geçersiz ürün veri formatı');
+         }
 
-            setUrun(productData.data);
+         setUrun(productData.data);
+         
+         // ✅ DÜZELTME: Ürün seçeneklerini çek
+         try {
+            // ✅ YENİ ENDPOINT (products route'ında tanımlı)
+            const optionsResponse = await fetch(`${API_URL}/api/products/${urunId}/options`);
             
-            // Ürün seçeneklerini çek
-            try {
-               const optionsResponse = await fetch(`${API_URL}/api/products/${urunId}/options`);
+            if (optionsResponse.ok) {
+               const optionsData = await optionsResponse.json();
+               console.log('Seçenek verileri:', optionsData);
                
-               if (optionsResponse.ok) {
-                  const optionsData = await optionsResponse.json();
-                  console.log('Seçenek verileri:', optionsData);
+               // Gelen veriyi güvenli bir şekilde işle
+               if (Array.isArray(optionsData)) {
+                  // Null veya geçersiz değerleri temizle
+                  const temizlenmisVeri = optionsData.filter(group => group && typeof group === 'object')
+                     .map(group => {
+                        // Emin ol ki her grup güvenli değerlerle dolsun
+                        let values = [];
+                        
+                        // Option values'u işle
+                        if (group.values && Array.isArray(group.values)) {
+                           values = group.values
+                              .filter(val => val && typeof val === 'object')
+                              .map(val => ({
+                                 id: val.id || `val-${Math.random().toString(36).slice(2, 7)}`,
+                                 value: val.name || group.name || 'Seçenek', // ✅ DÜZELTME: name kullan
+                                 price_adjustment: parseFloat(val.price_modifier) || 0 // ✅ DÜZELTME: price_modifier → price_adjustment
+                              }));
+                        }
+                        
+                        return {
+                           ...group,
+                           id: group.id || `group-${Math.random().toString(36).slice(2, 7)}`,
+                           name: group.name || 'Seçenek',
+                           type: group.type || 'multiple',
+                           values: values
+                        };
+                     });
                   
-                  // Gelen veriyi güvenli bir şekilde işle
-                  if (Array.isArray(optionsData)) {
-                     // Null veya geçersiz değerleri temizle
-                     const temizlenmisVeri = optionsData.filter(group => group && typeof group === 'object')
-                        .map(group => {
-                           // Emin ol ki her grup güvenli değerlerle dolsun
-                           let values = [];
-                           
-                           // Option values'u işle
-                           if (group.values && Array.isArray(group.values)) {
-                              values = group.values
-                                 .filter(val => val && typeof val === 'object')
-                                 .map(val => ({
-                                    id: val.id || `val-${Math.random().toString(36).slice(2, 7)}`,
-                                    value: val.value || group.name || 'Seçenek',
-                                    price_adjustment: parseFloat(val.price_adjustment) || 0
-                                 }));
-                           }
-                           
-                           return {
-                              ...group,
-                              id: group.id || `group-${Math.random().toString(36).slice(2, 7)}`,
-                              name: group.name || 'Seçenek',
-                              type: group.type || 'multiple',
-                              values: values
-                           };
-                        });
-                     
-                     setSecenekGruplari(temizlenmisVeri);
-                     
-                     // Her seçenek grubu için varsayılan değerleri ayarla
-                     const secenekler = {};
-                     temizlenmisVeri.forEach(group => {
-                        // Her grup için varsayılan değerleri ayarla
-                        if (group.values && group.values.length > 0) {
-                           if (group.type === 'single') {
-                              // Tekli seçim için ilk değeri seç
-                              secenekler[group.id] = [group.values[0].id];
-                           } else if (group.is_required) {
-                              // Zorunlu çoklu seçim için ilk değeri seç
-                              secenekler[group.id] = [group.values[0].id];
-                           } else {
-                              // Zorunlu olmayan seçimler için boş array
-                              secenekler[group.id] = [];
-                           }
+                  setSecenekGruplari(temizlenmisVeri);
+                  
+                  // Her seçenek grubu için varsayılan değerleri ayarla
+                  const secenekler = {};
+                  temizlenmisVeri.forEach(group => {
+                     // Her grup için varsayılan değerleri ayarla
+                     if (group.values && group.values.length > 0) {
+                        if (group.type === 'single') {
+                           // Tekli seçim için ilk değeri seç
+                           secenekler[group.id] = [group.values[0].id];
+                        } else if (group.is_required) {
+                           // Zorunlu çoklu seçim için ilk değeri seç
+                           secenekler[group.id] = [group.values[0].id];
                         } else {
+                           // Zorunlu olmayan seçimler için boş array
                            secenekler[group.id] = [];
                         }
-                     });
-                     
-                     setSecilenSecenekler(secenekler);
-                  }
-               }
-            } catch (optionsError) {
-               console.error('Seçenek verileri yüklenirken hata:', optionsError);
-               // Seçenekleri yükleme hatası kritik değil, devam et
-            }
-         } catch (error) {
-            console.error('Ürün detayları yüklenirken hata oluştu:', error);
-            setHata(`Ürün detayları yüklenemedi: ${error.message}`);
-            
-            // Hata mesajını göster ama yine de devam et
-            Alert.alert(
-               'Uyarı',
-               'Ürün detayları tam olarak yüklenemedi, bazı bilgiler sınırlı olabilir.',
-               [{ text: 'Tamam' }]
-            );
-            
-            // Ana ürün listesinden ürünü bularak geçici veri oluştur
-            try {
-               const allProductsResponse = await fetch(`${API_URL}/api/products`);
-               if (allProductsResponse.ok) {
-                  const allProductsData = await allProductsResponse.json();
-                  if (allProductsData.status === "success" && Array.isArray(allProductsData.data)) {
-                     const bulunanUrun = allProductsData.data.find(u => u.id === parseInt(urunId));
-                     if (bulunanUrun) {
-                        setUrun(bulunanUrun);
                      } else {
-                        throw new Error('Ürün bulunamadı');
+                        secenekler[group.id] = [];
                      }
+                  });
+                  
+                  setSecilenSecenekler(secenekler);
+               }
+            }
+         } catch (optionsError) {
+            console.error('Seçenek verileri yüklenirken hata:', optionsError);
+            // Seçenekleri yükleme hatası kritik değil, devam et
+         }
+      } catch (error) {
+         console.error('Ürün detayları yüklenirken hata oluştu:', error);
+         setHata(`Ürün detayları yüklenemedi: ${error.message}`);
+         
+         // Hata mesajını göster ama yine de devam et
+         Alert.alert(
+            'Uyarı',
+            'Ürün detayları tam olarak yüklenemedi, bazı bilgiler sınırlı olabilir.',
+            [{ text: 'Tamam' }]
+         );
+         
+         // Ana ürün listesinden ürünü bularak geçici veri oluştur
+         try {
+            const allProductsResponse = await fetch(`${API_URL}/api/products`);
+            if (allProductsResponse.ok) {
+               const allProductsData = await allProductsResponse.json();
+               if (allProductsData.status === "success" && Array.isArray(allProductsData.data)) {
+                  const bulunanUrun = allProductsData.data.find(u => u.id === parseInt(urunId));
+                  if (bulunanUrun) {
+                     setUrun(bulunanUrun);
+                  } else {
+                     throw new Error('Ürün bulunamadı');
                   }
                }
-            } catch (fallbackError) {
-               // Fallback olarak minimal ürün
-               const tempUrun = {
-                  id: parseInt(urunId),
-                  name: "Ürün #" + urunId,
-                  description: "Ürün açıklaması yüklenemedi",
-                  base_price: 0,
-                  image_url: null
-               };
-               setUrun(tempUrun);
             }
-         } finally {
-            setYukleniyor(false);
+         } catch (fallbackError) {
+            // Fallback olarak minimal ürün
+            const tempUrun = {
+               id: parseInt(urunId),
+               name: "Ürün #" + urunId,
+               description: "Ürün açıklaması yüklenemedi",
+               base_price: 0,
+               image_url: null
+            };
+            setUrun(tempUrun);
          }
-      };
-      
-      urunGetir();
-   }, [urunId]);
+      } finally {
+         setYukleniyor(false);
+      }
+   };
+   
+   urunGetir();
+}, [urunId]);
 
    // Seçenek değerini değiştir
    const handleSecenekDegistir = (groupId, valueId) => {
@@ -216,26 +217,27 @@ function UserProductDetailScreen({ route, navigation }) {
    };
 
    // Seçilen seçenekler için ekstra ücret hesapla
-   const secenekEkstraUcret = () => {
-      if (!secenekGruplari.length) return 0;
+const secenekEkstraUcret = () => {
+   if (!secenekGruplari.length) return 0;
+   
+   let toplamEkstra = 0;
+   
+   // Her grup için seçilen değerlerin fiyat düzenlemelerini topla
+   Object.entries(secilenSecenekler).forEach(([groupId, valueIds]) => {
+      const group = secenekGruplari.find(g => g.id === parseInt(groupId));
+      if (!group) return;
       
-      let toplamEkstra = 0;
-      
-      // Her grup için seçilen değerlerin fiyat düzenlemelerini topla
-      Object.entries(secilenSecenekler).forEach(([groupId, valueIds]) => {
-         const group = secenekGruplari.find(g => g.id === parseInt(groupId));
-         if (!group) return;
-         
-         valueIds.forEach(valueId => {
-            const value = group.values.find(v => v.id === valueId);
-            if (value && value.price_adjustment) {
-               toplamEkstra += parseFloat(value.price_adjustment);
-            }
-         });
+      valueIds.forEach(valueId => {
+         const value = group.values.find(v => v.id === valueId);
+         if (value && value.price_adjustment) {
+            // ✅ DÜZELTME: price_adjustment kullan
+            toplamEkstra += parseFloat(value.price_adjustment);
+         }
       });
-      
-      return toplamEkstra;
-   };
+   });
+   
+   return toplamEkstra;
+};
 
    // Toplam fiyat hesaplama
    const toplamFiyat = () => {
@@ -254,146 +256,141 @@ function UserProductDetailScreen({ route, navigation }) {
    };
 
    // Sepete ekleme fonksiyonu
-   const handleSepeteEkle = async () => {
-      // Zorunlu seçenekleri kontrol et
-      let zorunluSecenekIcermiyorMu = false;
-      
-      secenekGruplari.forEach(group => {
-         if (group.is_required && 
-             (!secilenSecenekler[group.id] || secilenSecenekler[group.id].length === 0)) {
-            zorunluSecenekIcermiyorMu = true;
-            Alert.alert('Uyarı', `Lütfen '${group.name}' için en az bir seçim yapınız.`);
-            return;
-         }
-      });
-      
-      if (zorunluSecenekIcermiyorMu) return;
-  
-      // Kullanıcı giriş yapmış mı kontrol et
-      
-         const token = await AsyncStorage.getItem('userToken');
-      
-      if (!token) {
-         Alert.alert(
-            'Giriş Yapmanız Gerekiyor',
-            'Sepete ürün eklemek için lütfen giriş yapın.',
-            [
-               { 
-                  text: 'Giriş Yap', 
-                  onPress: () => navigation.navigate('Start') 
-               },
-                  {
-                     text: 'İptal',
-                     style: 'cancel'
-                  }
-               ]
-            );
-            return;
-         
+   // ==================== SEPETEYEKLE FONKSİYONU ====================
+
+const handleSepeteEkle = async () => {
+   // Zorunlu seçenekleri kontrol et
+   let zorunluSecenekIcermiyorMu = false;
+   
+   secenekGruplari.forEach(group => {
+      if (group.is_required && 
+          (!secilenSecenekler[group.id] || secilenSecenekler[group.id].length === 0)) {
+         zorunluSecenekIcermiyorMu = true;
+         Alert.alert('Uyarı', `Lütfen '${group.name}' için en az bir seçim yapınız.`);
+         return;
       }
-  
-      try {
-         setYukleniyor(true);
-  
-         // Token'ı al
-         const token = userToken || await AsyncStorage.getItem('userToken');
-         
-         // Seçilen seçenekleri API formatına dönüştür
-         const formattedOptions = [];
-         Object.entries(secilenSecenekler).forEach(([groupId, valueIds]) => {
-            const group = secenekGruplari.find(g => g.id === parseInt(groupId));
-            if (!group || !valueIds.length) return;
-            
-            const groupValues = valueIds.map(valueId => {
-               const value = group.values.find(v => v.id === valueId);
-               return {
-                  value_id: valueId, 
-                  value: value ? value.value : '',
-                  price_adjustment: value ? value.price_adjustment : 0
-               };
-            });
-            
-            formattedOptions.push({
-               option_id: parseInt(groupId),
-               name: group.name,
-               type: group.type,
-               values: groupValues
-            });
-         });
-  
-         // API'ye sepete ekleme isteği
-         const response = await fetch(`${API_URL}/api/products/cart`, {
-            method: 'POST',
-            headers: {
-               'Authorization': `Bearer ${token}`,
-               'Content-Type': 'application/json'
+   });
+   
+   if (zorunluSecenekIcermiyorMu) return;
+
+   const token = await AsyncStorage.getItem('userToken');
+   
+   if (!token) {
+      Alert.alert(
+         'Giriş Yapmanız Gerekiyor',
+         'Sepete ürün eklemek için lütfen giriş yapın.',
+         [
+            { 
+               text: 'Giriş Yap', 
+               onPress: () => navigation.navigate('Start') 
             },
-            body: JSON.stringify({
-               product_id: urun.id,
-               quantity: miktar,
-               options: formattedOptions,
-               note: ''  // İsteğe bağlı not
-            })
+            {
+               text: 'İptal',
+               style: 'cancel'
+            }
+         ]
+      );
+      return;
+   }
+
+   try {
+      setYukleniyor(true);
+
+      const token = userToken || await AsyncStorage.getItem('userToken');
+      
+      // ✅ DÜZELTME: Seçilen seçenekleri API formatına dönüştür
+      const formattedOptions = [];
+      Object.entries(secilenSecenekler).forEach(([groupId, valueIds]) => {
+         const group = secenekGruplari.find(g => g.id === parseInt(groupId));
+         if (!group || !valueIds.length) return;
+         
+         const groupValues = valueIds.map(valueId => {
+            const value = group.values.find(v => v.id === valueId);
+            return {
+               value_id: valueId, 
+               value: value ? value.value : '',
+               price_adjustment: value ? value.price_adjustment : 0
+            };
          });
-  
-         // Yanıtın detaylarını al
-         const responseData = await response.json();
-  
-         if (!response.ok) {
-            console.error('Sepete ekleme hatası:', {
-               status: response.status,
-               body: responseData
-            });
-  
-            // Daha detaylı hata mesajı
-            Alert.alert(
-               'Hata', 
-               responseData.details || responseData.error || 'Ürün sepete eklenemedi',
-               [{ text: 'Tamam' }]
-            );
-            return;
-         }
-  
-         // Context'e sipariş detayları kaydedilir
-         const siparisDetaylari = {
-            urunId: urun.id,
-            urunAdi: urun.name,
-            fiyat: parseFloat(urun.base_price),
-            miktar: miktar,
-            secenekler: formattedOptions,
-            seceneklerEkstraFiyat: secenekEkstraUcret(),
-            toplamFiyat: parseFloat(toplamFiyat())
-         };
-  
-         // Context'e kaydet
-         setSiparisDetaylari(siparisDetaylari);
-  
-         // Başarılı mesajı göster
+         
+         formattedOptions.push({
+            option_id: parseInt(groupId),
+            name: group.name,
+            type: group.type,
+            values: groupValues
+         });
+      });
+
+      // API'ye sepete ekleme isteği
+      const response = await fetch(`${API_URL}/api/products/cart`, {
+         method: 'POST',
+         headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+         },
+         body: JSON.stringify({
+            product_id: urun.id,
+            quantity: miktar,
+            options: formattedOptions,
+            note: ''
+         })
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+         console.error('Sepete ekleme hatası:', {
+            status: response.status,
+            body: responseData
+         });
+
          Alert.alert(
-            'Başarılı',
-            'Ürün sepete eklendi',
-            [
-               { 
-                  text: 'Sepete Git', 
-                  onPress: () => navigation.navigate('Sepet') 
-               },
-               {
-                  text: 'Alışverişe Devam',
-                  onPress: () => navigation.goBack()
-               }
-            ]
-         );
-      } catch (error) {
-         console.error('Sepete eklerken ağ hatası:', error);
-         Alert.alert(
-            'Hata',
-            `Bağlantı hatası: ${error.message}`,
+            'Hata', 
+            responseData.details || responseData.error || 'Ürün sepete eklenemedi',
             [{ text: 'Tamam' }]
          );
-      } finally {
-         setYukleniyor(false);
+         return;
       }
-   };
+
+      // Context'e sipariş detayları kaydedilir
+      const siparisDetaylari = {
+         urunId: urun.id,
+         urunAdi: urun.name,
+         fiyat: parseFloat(urun.base_price),
+         miktar: miktar,
+         secenekler: formattedOptions,
+         seceneklerEkstraFiyat: secenekEkstraUcret(),
+         toplamFiyat: parseFloat(toplamFiyat())
+      };
+
+      setSiparisDetaylari(siparisDetaylari);
+
+      // Başarılı mesajı göster
+      Alert.alert(
+         'Başarılı',
+         'Ürün sepete eklendi',
+         [
+            { 
+               text: 'Sepete Git', 
+               onPress: () => navigation.navigate('Sepet') 
+            },
+            {
+               text: 'Alışverişe Devam',
+               onPress: () => navigation.goBack()
+            }
+         ]
+      );
+   } catch (error) {
+      console.error('Sepete eklerken ağ hatası:', error);
+      Alert.alert(
+         'Hata',
+         `Bağlantı hatası: ${error.message}`,
+         [{ text: 'Tamam' }]
+      );
+   } finally {
+      setYukleniyor(false);
+   }
+};
 
    // Yükleniyor durumunda göster
    if (yukleniyor) {
@@ -481,11 +478,12 @@ function UserProductDetailScreen({ route, navigation }) {
   
               {/* Seçenek Grupları */}
               {secenekGruplari && secenekGruplari.map(group => {
-                  if (!group || !group.id) return null;
+                  if (!group || !group.id || !group.values || group.values.length === 0) return null;
                   return (
                       <View key={String(group.id)} style={styles.secenekGrupContainer}>
+                          <Text style={styles.secenekGrupBaslik}>{group.name}</Text>
                           <View style={styles.seceneklerListContainer}>
-                              {group.values && Array.isArray(group.values) && group.values.map((value, index) => {
+                              {group.values.map((value, index) => {
                                   if (!value) return null;
                                   const valueId = value.id;
                                   const isSelected = secilenSecenekler[group.id] && 
@@ -705,6 +703,15 @@ const styles = StyleSheet.create({
         width: '100%',
         marginBottom: 0,
         paddingHorizontal: 0,
+    },
+    secenekGrupBaslik: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginTop: 10,
+        marginBottom: 4,
+        color: '#333333',
+        paddingHorizontal: 15,
+        width: '100%',
     },
     seceneklerListContainer: {
         width: '100%',

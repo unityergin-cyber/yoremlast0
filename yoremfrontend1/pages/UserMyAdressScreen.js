@@ -203,6 +203,7 @@ function UserMyAdressScreen({ navigation }) {
           {address.city}, {address.district}, {address.neighborhood}, {address.street}
         </Text>
         <Text style={styles.addressDetail}>{address.address_detail}</Text>
+        <Text style={styles.addressDetail}>{address.address_description}</Text>
         
         {!isDefault && (
           <TouchableOpacity 

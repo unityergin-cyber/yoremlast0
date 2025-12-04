@@ -1,4 +1,4 @@
-const db = require("../config/db");
+﻿const db = require("../config/db");
 const moment = require("moment");
 
 // Tüm çalışma saatlerini getir
@@ -66,7 +66,7 @@ const updateWorkingHours = (req, res) => {
         id
       ];
 
-      db.query(query, values, (err, result) => {
+      db.query(query, values, (err) => {
         if (err) {
           console.error("Çalışma saati güncelleme hatası:", err);
           return res.status(500).json({ error: "Çalışma saati güncellenemedi." });
@@ -82,27 +82,21 @@ const updateWorkingHours = (req, res) => {
 };
 
 // Şu anki çalışma durumunu kontrol et (açık mı kapalı mı)
-// Şu anki çalışma durumunu kontrol et (açık mı kapalı mı)
 const checkRestaurantOpen = (req, res) => {
-  // UTC zaman bilgisini al
-  const currentDateUTC = new Date();
-  
-  // Türkiye saati için UTC+3 uygula
-  const turkeyTime = new Date(currentDateUTC.getTime() + (3 * 60 * 60 * 1000));
-  const currentDay = turkeyTime.getDay(); // 0: Pazar, 1: Pazartesi, ... 6: Cumartesi
-  
-  // Şu anki saati al (saat:dakika:saniye formatında) - Türkiye saati
-  const currentTime = moment(turkeyTime).format('HH:mm:ss');
-  
-  // Şu anki saati dakika cinsinden hesapla - Türkiye saati
-  const currentHour = turkeyTime.getHours();
-  const currentMinute = turkeyTime.getMinutes();
-  const currentTimeInMinutes = currentHour * 60 + currentMinute;
+  // Sunucu saat diliminden bağımsız olarak Türkiye saatini hesapla
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000; // Yereli UTC'ye çevir
+  const turkeyTime = new Date(utcMs + 3 * 60 * 60 * 1000); // UTC'den UTC+3'e kaydır
+  const currentDateUTC = new Date(utcMs);
 
-  // Debug için saati loglayalım
+  const currentDay = turkeyTime.getDay(); // 0: Pazar, 1: Pazartesi, ... 6: Cumartesi
+  const currentTime = moment(turkeyTime).format("HH:mm:ss");
+  const currentTimeInMinutes = turkeyTime.getHours() * 60 + turkeyTime.getMinutes();
+
+  // Debug için saati logla
   console.log("Kontrol edilen saat (UTC vs Türkiye):", {
     utcDate: currentDateUTC.toISOString(),
-    utcTime: moment(currentDateUTC).format('HH:mm:ss'),
+    utcTime: moment(currentDateUTC).format("HH:mm:ss"),
     turkeyDate: turkeyTime.toISOString(),
     turkeyTime: currentTime,
     day: currentDay,
@@ -147,17 +141,17 @@ const checkRestaurantOpen = (req, res) => {
     }
 
     // Açılış ve kapanış saatlerini dakika cinsine çevir
-    const openingTimeParts = workingHours.opening_time.split(':');
+    const openingTimeParts = workingHours.opening_time.split(":");
     const openingHour = parseInt(openingTimeParts[0]);
     const openingMinute = parseInt(openingTimeParts[1]);
     const openingTimeInMinutes = openingHour * 60 + openingMinute;
 
-    const closingTimeParts = workingHours.closing_time.split(':');
+    const closingTimeParts = workingHours.closing_time.split(":");
     const closingHour = parseInt(closingTimeParts[0]);
     const closingMinute = parseInt(closingTimeParts[1]);
     const closingTimeInMinutes = closingHour * 60 + closingMinute;
 
-    // Debug için çalışma saatlerini loglayalım
+    // Debug için çalışma saatlerini logla
     console.log("Çalışma saatleri karşılaştırması:", {
       opening: workingHours.opening_time,
       closing: workingHours.closing_time,
@@ -172,12 +166,12 @@ const checkRestaurantOpen = (req, res) => {
     let isOpen = false;
     
     if (openingTimeInMinutes < closingTimeInMinutes) {
-      // Normal çalışma saati durumu (ör: 09:00 - 17:00)
+      // Örn: 09:00 - 17:00
       isOpen = currentTimeInMinutes >= openingTimeInMinutes && 
                currentTimeInMinutes <= closingTimeInMinutes;
       console.log("Normal çalışma saati kontrolü:", isOpen);
     } else {
-      // Gece yarısını geçen çalışma saati durumu (ör: 22:00 - 02:00)
+      // Gece yarısını geçen aralık (örn: 22:00 - 02:00)
       isOpen = currentTimeInMinutes >= openingTimeInMinutes || 
                currentTimeInMinutes <= closingTimeInMinutes;
       console.log("Gece yarısını geçen çalışma saati kontrolü:", isOpen);
@@ -190,7 +184,7 @@ const checkRestaurantOpen = (req, res) => {
       working_hours: workingHours,
       current_time: currentTime,
       debug: {
-        utcTime: moment(currentDateUTC).format('HH:mm:ss'),
+        utcTime: moment(currentDateUTC).format("HH:mm:ss"),
         turkeyTime: currentTime,
         currentTimeInMinutes,
         openingTimeInMinutes,

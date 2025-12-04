@@ -940,6 +940,56 @@ const getOrderDetails = async (req, res) => {
   }
 };
 
+// Siparişi sil (Admin)
+const deleteOrder = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await withTransaction(async (connection, query) => {
+      // 1. Siparişin var olup olmadığını kontrol et
+      const orderExists = await query(connection, "SELECT id FROM orders WHERE id = ?", [id]);
+      if (orderExists.length === 0) {
+        const error = new Error("Sipariş bulunamadı.");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // 2. İlişkili order_items kayıtlarını sil
+      await query(connection, "DELETE FROM order_items WHERE order_id = ?", [id]);
+
+      // 3. İlişkili order_status_history kayıtlarını sil
+      await query(connection, "DELETE FROM order_status_history WHERE order_id = ?", [id]);
+
+      // 4. Ana sipariş kaydını sil
+      const deleteResult = await query(connection, "DELETE FROM orders WHERE id = ?", [id]);
+
+      return deleteResult;
+    });
+
+    if (result.affectedRows === 0) {
+      // Bu durum withTransaction içindeki kontrolle zaten yakalanmalı ama yine de ekleyelim
+      return res.status(404).json({
+        status: "error",
+        message: "Sipariş bulunamadı.",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: `Sipariş (ID: ${id}) başarıyla silindi.`,
+    });
+
+  } catch (err) {
+    const statusCode = err.statusCode || 500;
+    const errorMessage = err.message || "Sipariş silinirken bir hata oluştu.";
+    console.error("Sipariş silme hatası:", err);
+    res.status(statusCode).json({
+      status: "error",
+      message: errorMessage,
+    });
+  }
+};
+
 // Modül export
 module.exports = {
   createOrder,
@@ -949,7 +999,8 @@ module.exports = {
   cancelOrder,
   getOrderDetails,
   getOrderById,
-  getOrderStatuses // Yeni eklenen fonksiyon
+  getOrderStatuses, // Yeni eklenen fonksiyon
+  deleteOrder
 };
 
 
