@@ -646,7 +646,7 @@ const addToCart = (req, res) => {
     return res.status(401).json({ error: "Yetkisiz erişim" });
   }
 
-  const { product_id, quantity, option, note } = req.body;
+  const { product_id, quantity, options, note } = req.body;
 
   // Zorunlu alan kontrolleri
   if (!product_id) {
@@ -701,7 +701,7 @@ const addToCart = (req, res) => {
       user_type,
       product_id,
       quantity,
-      option || null,
+      options ? JSON.stringify(options) : null,
       note || null,
       new Date(),
       guest_id,
@@ -819,24 +819,52 @@ const getCart = (req, res) => {
       }
 
       // Sepet öğelerini ürün bilgileriyle birleştir
-      const enrichedCart = cartItems.map((cartItem) => {
-        const product =
-          products.find((p) => p.id === cartItem.product_id) || {};
-        return {
-          id: cartItem.id,
-          name: product.name || "Ürün bulunamadı",
-          base_price: product.base_price || 0,
-          quantity: cartItem.quantity,
-          options: cartItem.options,
-          image_url: product.image_url,
-          product_id: cartItem.product_id,
-        };
-      });
+    const enrichedCart = cartItems.map((cartItem) => {
+    const product = products.find((p) => p.id === cartItem.product_id) || {};
+    
+    // ✅ DÜZELTME: Options fiyatlarını hesapla
+    let optionsPrice = 0;
+    if (cartItem.options) {
+        try {
+            const parsedOptions = typeof cartItem.options === 'string' 
+                ? JSON.parse(cartItem.options) 
+                : cartItem.options;
+            
+            if (Array.isArray(parsedOptions)) {
+                parsedOptions.forEach(option => {
+                    if (option && option.values && Array.isArray(option.values)) {
+                        option.values.forEach(val => {
+                            if (val && val.price_adjustment) {
+                                optionsPrice += parseFloat(val.price_adjustment);
+                            }
+                        });
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('Options parse error:', e);
+        }
+    }
+    
+    // ✅ DÜZELTME: base_price'a options fiyatını ekle
+    const finalPrice = parseFloat(product.base_price || 0) + optionsPrice;
+    
+    return {
+        id: cartItem.id,
+        name: product.name || "Ürün bulunamadı",
+        base_price: finalPrice, // ✅ Options fiyatı dahil!
+        quantity: cartItem.quantity,
+        options: cartItem.options,
+        image_url: product.image_url,
+        product_id: cartItem.product_id,
+        options_price: optionsPrice, // ✅ DEBUG için
+    };
+});
 
-      const total = enrichedCart.reduce(
-        (sum, item) => sum + parseFloat(item.base_price) * item.quantity,
-        0
-      );
+const total = enrichedCart.reduce(
+    (sum, item) => sum + item.base_price * item.quantity, // ✅ base_price artık complete
+    0
+);
 
       res.json({
         cart: enrichedCart,

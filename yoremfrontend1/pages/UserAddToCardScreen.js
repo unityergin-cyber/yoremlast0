@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
     View, 
     Text, 
@@ -27,6 +27,93 @@ function UserAddToCardScreen({ navigation }) {
     const { siparisDetaylari, userToken, isLoggedIn } = useKullanici();
     const [sepet, setSepet] = useState([]);
     const [yukleniyor, setYukleniyor] = useState(true);
+
+    // SeÃ§enekleri guvenli sekilde parse edip fiyat ayarlamalarini topla
+    const parseOptionsAndPrice = (options) => {
+        const result = { parsed: null, rawString: "", price: 0 };
+        if (!options) return result;
+
+        const raw = typeof options === "string" ? options.trim() : options;
+        if (typeof raw === "string") result.rawString = raw;
+
+        if (typeof raw === "string" && raw) {
+            const looksComplete =
+                (raw.startsWith("[") && raw.endsWith("]")) ||
+                (raw.startsWith("{") && raw.endsWith("}"));
+            if (looksComplete) {
+                try {
+                    result.parsed = JSON.parse(raw);
+                } catch (e) {
+                    console.warn("Options parse failed:", e);
+                }
+            }
+        } else if (Array.isArray(raw) || typeof raw === "object") {
+            result.parsed = raw;
+        }
+
+        const addAdjustments = (vals = []) => {
+            vals.forEach((val) => {
+                const mod = val?.price_adjustment ?? val?.priceModifier ?? val?.price_modifier;
+                if (mod !== undefined && mod !== null) {
+                    const adj = parseFloat(mod);
+                    if (!isNaN(adj)) result.price += adj;
+                }
+            });
+        };
+
+        if (Array.isArray(result.parsed)) {
+            result.parsed.forEach((opt) => {
+                if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
+            });
+        } else if (result.parsed && typeof result.parsed === "object") {
+            Object.values(result.parsed).forEach((opt) => {
+                if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
+            });
+        }
+
+        if (result.price === 0 && typeof raw === "string") {
+            const regex = /"price(?:_)?(?:adjustment|modifier)"\s*:\s*(-?\d+(?:\.\d+)?)/gi;
+            let match;
+            while ((match = regex.exec(raw)) !== null) {
+                const adj = parseFloat(match[1]);
+                if (!isNaN(adj)) result.price += adj;
+            }
+        }
+
+        return result;
+    };
+
+    // SeÃ§eneklerin metinsel gosterimi
+    const buildOptionText = (parsedOptions) => {
+        if (!parsedOptions) return "Standart";
+        const parts = [];
+
+        if (Array.isArray(parsedOptions)) {
+            parsedOptions.forEach((option) => {
+                if (option && Array.isArray(option.values)) {
+                    const valueTexts = option.values
+                        .filter((val) => val?.value || val?.name)
+                        .map((val) => val.value || val.name)
+                        .join(", ");
+                    if (valueTexts) parts.push(option.name ? `${option.name}: ${valueTexts}` : valueTexts);
+                }
+            });
+        } else if (parsedOptions && typeof parsedOptions === "object") {
+            Object.values(parsedOptions).forEach((option) => {
+                if (option && Array.isArray(option.values)) {
+                    const valueTexts = option.values
+                        .filter((val) => val?.value || val?.name)
+                        .map((val) => val.value || val.name)
+                        .join(", ");
+                    if (valueTexts) parts.push(option.name ? `${option.name}: ${valueTexts}` : valueTexts);
+                } else if (option?.value) {
+                    parts.push(option.value);
+                }
+            });
+        }
+
+        return parts.length > 0 ? parts.join(" | ") : "Standart";
+    };
 
     useEffect(() => {
         sepetVerileriniGetir();
@@ -71,49 +158,16 @@ function UserAddToCardScreen({ navigation }) {
                     const responseData = JSON.parse(responseText);
                     console.log("Çözümlenmiş sepet verisi:", responseData);
                     
-                    if (responseData.cart && Array.isArray(responseData.cart)) {
+                                          if (responseData.cart && Array.isArray(responseData.cart)) {
                         const formatlanmisSepet = responseData.cart.map(item => {
-                            // Options verisi için kullanıcı dostu gösterim oluştur
-                            let seceneklerText = 'Standart';
-                            try {
-                                if (item.options) {
-                                    // Eğer string ise JSON olarak parse et
-                                    const optionsData = typeof item.options === 'string' 
-                                        ? JSON.parse(item.options) 
-                                        : item.options;
-                                    
-                                    // Yeni format: [{option_id, name, type, values:[]}]
-                                    if (Array.isArray(optionsData)) {
-                                        seceneklerText = optionsData
-                                            .map(option => {
-                                                // Seçenek adı ve değerlerini birleştir
-                                                const valueTexts = option.values
-                                                    .filter(val => val.value) // Boş olmayan değerler
-                                                    .map(val => val.value)
-                                                    .join(', ');
-                                                
-                                                // Eğer değer varsa göster
-                                                return valueTexts ? `${option.name}: ${valueTexts}` : option.name;
-                                            })
-                                            .filter(text => text) // Boş olmayanları filtrele
-                                            .join(' | ');
-                                    }
-                                    // Eski format: string değeri
-                                    else if (typeof optionsData === 'string') {
-                                        seceneklerText = optionsData;
-                                    }
-                                }
-                            } catch (e) {
-                                console.log('Options parse hatası:', e);
-                                // Hata durumunda raw veriyi göster
-                                seceneklerText = item.options ? String(item.options).substring(0, 20) : 'Standart';
-                            }
+                            const { parsed, rawString, price: optionsPrice } = parseOptionsAndPrice(item.options);
+                            const seceneklerText = buildOptionText(parsed) || (rawString ? rawString.substring(0, 20) : 'Standart');
                             
                             return {
                                 id: item.id,
-                                ad: item.name || "İsimsiz ürün",
+                                ad: item.name || "Isimsiz urun",
                                 resim: item.image_url,
-                                fiyat: parseFloat(item.base_price || 0),
+                                fiyat: parseFloat(item.base_price || item.unit_price || item.price || 0) + optionsPrice,
                                 adet: item.quantity || 1,
                                 boyut: seceneklerText,
                                 productId: item.product_id
@@ -272,8 +326,8 @@ function UserAddToCardScreen({ navigation }) {
     }
 
     const toplamFiyat = sepet.reduce((total, urun) => 
-        total + (urun.fiyat * urun.adet), 0
-    ).toFixed(2);
+    total + (urun.fiyat * urun.adet), 0
+        ).toFixed(2);
 
     return (
         <View style={styles.container}>
@@ -656,3 +710,4 @@ const styles = StyleSheet.create({
 });
     
 export default UserAddToCardScreen;
+

@@ -4,19 +4,15 @@ import { AuthContext } from "../../context/AuthContext";
 import api from "../../services/api";
 import AdminOrderDetails from "./AdminOrderDetails";
 import StatusUpdateModal from "./StatusUpdateModal";
-import {
-  FaEdit,
-  FaTrash,
-  FaPrint,
-  FaSyncAlt
-} from "react-icons/fa";
-import Sidebar from "./SideBar";
+import { FaEdit, FaTrash, FaPrint, FaSyncAlt } from "react-icons/fa";
+import Sidebar from "./Sidebar";
 import "./Orders.css";
 
 const AdminOrders = () => {
-  const { admin, logout } = useContext(AuthContext);
+  const { admin } = useContext(AuthContext);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -24,13 +20,91 @@ const AdminOrders = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(() => {
-    return parseInt(searchParams.get("page")) || 1;
-  });
+  const [currentPage, setCurrentPage] = useState(() => parseInt(searchParams.get("page")) || 1);
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+
   const ordersPerPage = 10;
+
+  // Seçenek fiyatlarını hesapla
+  const getOptionsAdjustment = (options) => {
+    let optionsPrice = 0;
+    if (!options) return optionsPrice;
+
+    const raw = typeof options === "string" ? options.trim() : options;
+    let parsed = null;
+
+    // JSON parse et
+    if (typeof raw === "string" && raw) {
+      const looksComplete =
+        (raw.startsWith("[") && raw.endsWith("]")) ||
+        (raw.startsWith("{") && raw.endsWith("}"));
+      if (looksComplete) {
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          console.warn("Options parse failed:", e);
+        }
+      }
+    } else if (Array.isArray(raw) || typeof raw === "object") {
+      parsed = raw;
+    }
+
+    // Fiyat ayarlamalarını topla
+    const addAdjustments = (vals = []) => {
+      vals.forEach((val) => {
+        const mod = val?.price_adjustment ?? val?.priceModifier ?? val?.price_modifier;
+        if (mod !== undefined && mod !== null) {
+          const adj = parseFloat(mod);
+          if (!isNaN(adj)) {
+            optionsPrice += adj;
+          }
+        }
+      });
+    };
+
+    if (Array.isArray(parsed)) {
+      parsed.forEach((opt) => {
+        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
+      });
+    } else if (parsed && typeof parsed === "object") {
+      Object.values(parsed).forEach((opt) => {
+        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
+      });
+    }
+
+    // Eğer parse başarısız olduysa, regex ile dene
+    if (optionsPrice === 0 && typeof raw === "string") {
+      const regex = /"price(?:_)?(?:adjustment|modifier)"\s*:\s*(-?\d+(?:\.\d+)?)/gi;
+      let match;
+      while ((match = regex.exec(raw)) !== null) {
+        const adj = parseFloat(match[1]);
+        if (!isNaN(adj)) optionsPrice += adj;
+      }
+    }
+
+    return optionsPrice;
+  };
+
+  // Sipariş toplamını hesapla (seçenekler dahil)
+  const computeOrderTotal = (order) => {
+    if (!order) return "0.00";
+    const items = order.order_items || order.orderItems || order.items || [];
+    if (!Array.isArray(items) || items.length === 0) {
+      return parseFloat(order.total_amount || 0).toFixed(2);
+    }
+
+    const total = items.reduce((sum, item) => {
+      const basePrice = parseFloat(item.unit_price || item.price || 0);
+      const qty = item.quantity || 1;
+      const optionAdj = getOptionsAdjustment(item.options);
+      
+      return sum + (basePrice + optionAdj) * qty;
+    }, 0);
+
+    return total.toFixed(2);
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -52,11 +126,9 @@ const AdminOrders = () => {
       setLoading(true);
       try {
         const response = await api.get("/api/orders/all");
-        console.log("Orders Response:", response.data);
         setOrders(response.data.data || []);
         setFilteredOrders(response.data.data || []);
       } catch (err) {
-        console.error("Fetch Orders Error:", err);
         setError(err.response?.data?.error || "Siparişler getirilemedi.");
       } finally {
         setLoading(false);
@@ -72,26 +144,20 @@ const AdminOrders = () => {
     if (searchTerm) {
       filtered = filtered.filter(
         (order) =>
-          order.id.toString().includes(searchTerm) ||
-          (order.user_full_name && order.user_full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          order.id?.toString().includes(searchTerm) ||
+          (order.user_full_name &&
+            order.user_full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
           (order.user_id && order.user_id.toString().includes(searchTerm))
       );
     }
     if (statusFilter !== "all") {
-      filtered = filtered.filter(
-        (order) => order.order_status === statusFilter
-      );
+      filtered = filtered.filter((order) => order.order_status === statusFilter);
     }
     setFilteredOrders(filtered);
 
     const pageFromUrl = parseInt(searchParams.get("page")) || 1;
-    if (
-      filtered.length > 0 &&
-      pageFromUrl > Math.ceil(filtered.length / ordersPerPage)
-    ) {
-      setCurrentPage(1);
-      setSearchParams({ page: "1" });
-    } else if (searchTerm || statusFilter !== "all") {
+    const maxPage = Math.max(1, Math.ceil(filtered.length / ordersPerPage));
+    if (pageFromUrl > maxPage || searchTerm || statusFilter !== "all") {
       setCurrentPage(1);
       setSearchParams({ page: "1" });
     } else {
@@ -100,7 +166,8 @@ const AdminOrders = () => {
   }, [searchTerm, statusFilter, orders, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (parseInt(searchParams.get("page")) !== currentPage) {
+    const pageParam = parseInt(searchParams.get("page"));
+    if (pageParam !== currentPage) {
       setSearchParams({ page: currentPage.toString() });
     }
   }, [currentPage, searchParams, setSearchParams]);
@@ -114,11 +181,8 @@ const AdminOrders = () => {
 
   const indexOfLastOrder = currentPage * ordersPerPage;
   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
-  const currentOrders = filteredOrders.slice(
-    indexOfFirstOrder,
-    indexOfLastOrder
-  );
-  const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
+  const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPerPage));
 
   const handlePrevPage = () => {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
@@ -136,12 +200,10 @@ const AdminOrders = () => {
     if (window.confirm("Bu siparişi silmek istediğinizden emin misiniz?")) {
       try {
         await api.delete(`/api/orders/${orderId}`);
-        setOrders(orders.filter((order) => order.id !== orderId));
+        setOrders((prev) => prev.filter((order) => order.id !== orderId));
         setIsEditPanelOpen(false);
       } catch (err) {
-        setError(
-          err.response?.data?.error || "Sipariş silinirken bir hata oluştu."
-        );
+        setError(err.response?.data?.error || "Sipariş silinirken bir hata oluştu.");
       }
     }
   };
@@ -153,11 +215,11 @@ const AdminOrders = () => {
 
   const handleCloseEditPanel = () => {
     setIsEditPanelOpen(false);
-    setTimeout(() => setSelectedOrder(null), 500);
+    setTimeout(() => setSelectedOrder(null), 300);
   };
 
   const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
+    setIsSidebarOpen((prev) => !prev);
   };
 
   const handlePrint = () => {
@@ -173,30 +235,29 @@ const AdminOrders = () => {
   };
 
   const handleStatusUpdate = (newStatus) => {
-    setOrders(orders.map(order => 
-      order.id === selectedOrder.id 
-        ? {...order, order_status: newStatus} 
-        : order
-    ));
-    
-    setSelectedOrder({...selectedOrder, order_status: newStatus});
+    setOrders(
+      orders.map((order) =>
+        order.id === selectedOrder.id ? { ...order, order_status: newStatus } : order
+      )
+    );
+    setSelectedOrder({ ...selectedOrder, order_status: newStatus });
   };
 
   const translatePaymentType = (type) => {
     const translations = {
-      'cash': 'Nakit',
-      'credit_card': 'Kredi Kartı'
+      cash: "Nakit",
+      credit_card: "Kredi Kartı",
     };
     return translations[type] || type;
   };
 
   const translateOrderStatus = (status) => {
     const translations = {
-      'pending': 'Beklemede',
-      'preparing': 'Hazırlanıyor',
-      'on_the_way': 'Yolda',
-      'delivered': 'Teslim Edildi',
-      'cancelled': 'İptal Edildi'
+      pending: "Beklemede",
+      preparing: "Hazırlanıyor",
+      on_the_way: "Yolda",
+      delivered: "Teslim Edildi",
+      cancelled: "İptal Edildi",
     };
     return translations[status] || status;
   };
@@ -248,22 +309,18 @@ const AdminOrders = () => {
         <div className="sidebar-header">
           <h2 className="sidebar-title">Admin</h2>
           <button className="close-sidebar" onClick={toggleSidebar}>
-            ✕
+            ×
           </button>
         </div>
         <Sidebar isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
       </aside>
 
-      <main
-        className={`main-content ${
-          isSidebarOpen ? "sidebar-open" : "sidebar-closed"
-        }`}
-      >
+      <main className={`main-content ${isSidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
         <section className="orders-section">
           <div className="filters">
             <input
               type="text"
-              placeholder="Sipariş ID, Üye Adı veya Kullanıcı ID ara..."
+              placeholder="Sipariş ID, müşteri adı veya kullanıcı ID ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-bar"
@@ -294,9 +351,9 @@ const AdminOrders = () => {
                   <thead>
                     <tr>
                       <th>Sipariş ID</th>
-                      <th>Üye Adı</th>
-                      <th>Ödeme Türü</th>
-                      <th>Toplam Tutar</th>
+                      <th>Müşteri</th>
+                      <th>Ödeme Tipi</th>
+                      <th>Toplam</th>
                       <th>Durum</th>
                       <th>Tarih</th>
                       <th>İşlemler</th>
@@ -307,21 +364,21 @@ const AdminOrders = () => {
                       <tr key={order.id}>
                         <td>{order.id}</td>
                         <td>
-                        {order.user_full_name || 
-   (order.user_id ? `Kullanıcı #${order.user_id}` : "Misafir")}
+                          {order.user_full_name ||
+                            (order.user_id ? `Kullanıcı #${order.user_id}` : "Misafir")}
                         </td>
                         <td>
                           <span className={`payment-badge payment-${order.payment_type}`}>
                             {translatePaymentType(order.payment_type)}
                           </span>
                         </td>
-                        <td>{parseFloat(order.total_amount).toFixed(2)} TL</td>
+                        <td>{computeOrderTotal(order)} TL</td>
                         <td>
                           <span className={`status-badge status-${order.order_status}`}>
                             {translateOrderStatus(order.order_status)}
                           </span>
                         </td>
-                        <td>{new Date(order.order_time).toLocaleString()}</td>
+                        <td>{order.order_time ? new Date(order.order_time).toLocaleString() : "-"}</td>
                         <td>
                           <button
                             className="action-btn edit-btn"
@@ -341,26 +398,16 @@ const AdminOrders = () => {
                   </tbody>
                 </table>
               </div>
-              <div
-                className="pagination"
-                style={{ marginTop: "20px", textAlign: "center" }}
-              >
-                <button
-                  onClick={handlePrevPage}
-                  disabled={currentPage === 1}
-                  className="action-btn"
-                  style={{ margin: "0 10px" }}
-                >
+
+              <div className="pagination" style={{ marginTop: "20px", textAlign: "center" }}>
+                <button onClick={handlePrevPage} disabled={currentPage === 1} className="action-btn">
                   Önceki
                 </button>
                 {Array.from({ length: totalPages }, (_, index) => (
                   <button
                     key={index + 1}
                     onClick={() => handlePageClick(index + 1)}
-                    className={`action-btn ${
-                      currentPage === index + 1 ? "edit-btn" : ""
-                    }`}
-                    style={{ margin: "0 5px" }}
+                    className={`action-btn ${currentPage === index + 1 ? "edit-btn" : ""}`}
                   >
                     {index + 1}
                   </button>
@@ -369,7 +416,6 @@ const AdminOrders = () => {
                   onClick={handleNextPage}
                   disabled={currentPage === totalPages}
                   className="action-btn"
-                  style={{ margin: "0 10px" }}
                 >
                   Sonraki
                 </button>
@@ -382,27 +428,18 @@ const AdminOrders = () => {
           <div className={`edit-panel ${isEditPanelOpen ? "open" : "closed"}`}>
             <div className="edit-panel-header">
               <h2>Sipariş Detay #{selectedOrder.id}</h2>
-              <button
-                className="close-edit-panel"
-                onClick={handleCloseEditPanel}
-              >
-                ✕
+              <button className="close-edit-panel" onClick={handleCloseEditPanel}>
+                ×
               </button>
             </div>
-            
+
             <AdminOrderDetails order={selectedOrder} />
 
             <div className="edit-panel-action-bar">
-              <button
-                className="action-bar-btn print-btn"
-                onClick={handlePrint}
-              >
+              <button className="action-bar-btn print-btn" onClick={handlePrint}>
                 <FaPrint /> Yazdır
               </button>
-              <button
-                className="action-bar-btn update-status-btn"
-                onClick={handleOpenStatusModal}
-              >
+              <button className="action-bar-btn update-status-btn" onClick={handleOpenStatusModal}>
                 <FaSyncAlt /> Durumu Güncelle
               </button>
               <button

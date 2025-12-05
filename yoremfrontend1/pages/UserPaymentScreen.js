@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
     View, 
     Text, 
@@ -79,6 +79,68 @@ function UserPaymentScreen(props) {
             };
         }, [isLoggedIn])
     );
+
+    // Ürün seçeneklerini parse edip fiyat ayarlamalarını topla
+    const parseOptionsAndPrice = (options) => {
+        const result = {
+            parsed: null,
+            rawString: "",
+            price: 0
+        };
+
+        if (!options) return result;
+
+        const raw = typeof options === "string" ? options.trim() : options;
+        if (typeof raw === "string") {
+            result.rawString = raw;
+        }
+
+        if (typeof raw === "string" && raw) {
+            const looksComplete =
+                (raw.startsWith("[") && raw.endsWith("]")) ||
+                (raw.startsWith("{") && raw.endsWith("}"));
+            if (looksComplete) {
+                try {
+                    result.parsed = JSON.parse(raw);
+                } catch (e) {
+                    console.warn("Options parse failed:", e);
+                }
+            }
+        } else if (Array.isArray(raw) || typeof raw === "object") {
+            result.parsed = raw;
+        }
+
+        const addAdjustments = (vals = []) => {
+            vals.forEach(val => {
+                const mod = val?.price_adjustment ?? val?.priceModifier ?? val?.price_modifier;
+                if (mod !== undefined && mod !== null) {
+                    const adj = parseFloat(mod);
+                    if (!isNaN(adj)) result.price += adj;
+                }
+            });
+        };
+
+        if (Array.isArray(result.parsed)) {
+            result.parsed.forEach(option => {
+                if (option && Array.isArray(option.values)) addAdjustments(option.values);
+            });
+        } else if (result.parsed && typeof result.parsed === "object") {
+            Object.values(result.parsed).forEach(option => {
+                if (option && Array.isArray(option.values)) addAdjustments(option.values);
+            });
+        }
+
+        if (result.price === 0 && typeof raw === "string") {
+            const regex = /"price(?:_)?(?:adjustment|modifier)"\s*:\s*(-?\d+(?:\.\d+)?)/gi;
+            let match;
+            while ((match = regex.exec(raw)) !== null) {
+                const adj = parseFloat(match[1]);
+                if (!isNaN(adj)) result.price += adj;
+            }
+        }
+
+        return result;
+    };
 
     const adresBilgileriniGetir = async () => {
         setYukleniyor(true);
@@ -164,13 +226,14 @@ function UserPaymentScreen(props) {
                 return "0.00";
             }
             
-            // Toplam tutarı hesapla
+            // Toplam tutarı hesapla (seçenek fiyatları dahil)
             const toplam = responseData.cart.reduce((toplam, urun) => {
-                const fiyat = parseFloat(urun.base_price || 0);
+                const fiyat = parseFloat(urun.base_price || urun.unit_price || urun.price || 0);
                 const adet = urun.quantity || 1;
-                const itemTotal = fiyat * adet;
+                const { price: optionsPrice } = parseOptionsAndPrice(urun.options);
+                const itemTotal = (fiyat + optionsPrice) * adet;
                 
-                console.log(`Ürün: ${urun.name}, Birim Fiyat: ${fiyat}, Adet: ${adet}, Ara Toplam: ${itemTotal}`);
+                console.log(`Ürün: ${urun.name}, Birim Fiyat: ${fiyat}, Seçenek Fiyatı: ${optionsPrice}, Adet: ${adet}, Ara Toplam: ${itemTotal}`);
                 
                 return toplam + itemTotal;
             }, 0);
@@ -249,8 +312,9 @@ const handleSiparisTamamlaButton = async () => {
     console.log("Seçili adres:", seciliAdres);
     
     // 4. Mahalle minimum sipariş tutarını kontrol et
+    const guncelToplamStr = await hesaplaToplam();
+    const sepetToplami = parseFloat(guncelToplamStr || '0');
     const mahalleMinTutar = parseFloat(seciliAdres.min_order_amount || 0);
-    const sepetToplami = parseFloat(toplamFiyat || 0);
     
     console.log("Mahalle minimum tutarı:", mahalleMinTutar);
     console.log("Sepet toplamı:", sepetToplami);

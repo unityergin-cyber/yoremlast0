@@ -68,6 +68,7 @@ function AddNewAdressScreen({ navigation, route }) {
                     neighborhood: adresBilgileri.neighborhood,
                     street: adresBilgileri.street,
                     address_detail: adresBilgileri.address_detail,
+                    address_description: adresBilgileri.address_description, // Added this line
                     is_default: adresBilgileri.is_default
                 })
             });

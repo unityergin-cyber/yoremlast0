@@ -27,7 +27,7 @@ const AssignProductOptions = () => {
     try {
       const response = await api.get('/api/products');
       setProducts(response.data.data);
-    } catch (error) {
+    } catch {
       message.error('Ürünler yüklenirken bir hata oluştu');
     }
   };
@@ -37,7 +37,7 @@ const AssignProductOptions = () => {
     try {
       const response = await api.get('/api/options');
       setOptions(response.data);
-    } catch (error) {
+    } catch {
       message.error('Seçenekler yüklenirken bir hata oluştu');
     }
   };
@@ -48,7 +48,7 @@ const AssignProductOptions = () => {
     try {
       const response = await api.get(`/api/products/${productId}/options`);
       setProductOptions(response.data);
-    } catch (error) {
+    } catch {
       message.error('Ürün seçenekleri yüklenirken bir hata oluştu');
       setProductOptions([]);
     }
@@ -84,7 +84,7 @@ const AssignProductOptions = () => {
         message.success('Seçenek başarıyla kaldırıldı');
       }
       fetchProductOptions(selectedProduct);
-    } catch (error) {
+    } catch {
       message.error('İşlem sırasında bir hata oluştu');
     }
   };
@@ -97,7 +97,7 @@ const AssignProductOptions = () => {
       });
       message.success('Seçenek durumu güncellendi');
       fetchProductOptions(selectedProduct);
-    } catch (error) {
+    } catch {
       message.error('Güncelleme sırasında bir hata oluştu');
     }
   };

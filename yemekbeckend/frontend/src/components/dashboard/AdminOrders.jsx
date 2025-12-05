@@ -193,6 +193,89 @@ const AdminOrders = () => {
     alert("İade İşlemleri butonuna tıklandı!");
   };
 
+  const getOptionsAdjustment = (options) => {
+    // Opsiyon verilerinden price adjustment/modifier değerlerini topla
+    let optionsPrice = 0;
+    if (!options) return optionsPrice;
+
+    const raw = typeof options === "string" ? options.trim() : options;
+    let parsed = null;
+
+    if (typeof raw === "string" && raw) {
+      const looksComplete =
+        (raw.startsWith("[") && raw.endsWith("]")) ||
+        (raw.startsWith("{") && raw.endsWith("}"));
+      if (looksComplete) {
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          console.warn("Options parse failed:", e);
+        }
+      }
+    } else if (Array.isArray(raw) || typeof raw === "object") {
+      parsed = raw;
+    }
+
+    const addAdjustments = (vals = []) => {
+      vals.forEach((val) => {
+        const mod =
+          val?.price_adjustment ??
+          val?.priceModifier ??
+          val?.price_modifier;
+        if (mod !== undefined && mod !== null) {
+          const adj = parseFloat(mod);
+          if (!isNaN(adj)) {
+            optionsPrice += adj;
+          }
+        }
+      });
+    };
+
+    if (Array.isArray(parsed)) {
+      parsed.forEach((opt) => {
+        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
+      });
+    } else if (parsed && typeof parsed === "object") {
+      Object.values(parsed).forEach((opt) => {
+        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
+      });
+    }
+
+    if (optionsPrice === 0 && typeof raw === "string") {
+      const regex = /\"price(?:_)?(?:adjustment|modifier)\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)/gi;
+      let match;
+      while ((match = regex.exec(raw)) !== null) {
+        const adj = parseFloat(match[1]);
+        if (!isNaN(adj)) optionsPrice += adj;
+      }
+    }
+
+    return optionsPrice;
+  };
+
+  const computeOrderTotal = (order) => {
+    if (!order) return "0.00";
+    const items = order.order_items || order.orderItems || order.items || [];
+    if (!Array.isArray(items) || items.length === 0) {
+      return parseFloat(order.total_amount || 0).toFixed(2);
+    }
+
+    const total = items.reduce((sum, item) => {
+      const unitPrice = item.unit_price ?? item.unitPrice;
+      const baseRaw = unitPrice ?? item.base_price ?? item.price ?? 0;
+      const base = parseFloat(baseRaw);
+      const safeBase = isNaN(base) ? 0 : base;
+      const qty = item.quantity || 1;
+      const optionAdj = unitPrice === undefined ? getOptionsAdjustment(item.options) : 0;
+      return sum + (safeBase + optionAdj) * qty;
+    }, 0);
+
+    if (Number.isFinite(total)) {
+      return total.toFixed(2);
+    }
+    return parseFloat(order.total_amount || 0).toFixed(2);
+  };
+
   if (!admin) return null;
 
   return (
@@ -293,35 +376,38 @@ const AdminOrders = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {currentOrders.map((order) => (
-                      <tr key={order.id}>
-                        <td>{order.id}</td>
-                        <td>{order.user_id || "Misafir"}</td>
-                        <td>{order.total_amount} TL</td>
-                        <td>
-                          <span
-                            className={`status-badge status-${order.order_status}`}
-                          >
-                            {order.order_status}
-                          </span>
-                        </td>
-                        <td>{new Date(order.order_time).toLocaleString()}</td>
-                        <td>
-                          <button
-                            className="action-btn edit-btn"
-                            onClick={() => handleEditClick(order)}
-                          >
-                            <FaEdit />
-                          </button>
-                          <button
-                            className="action-btn delete-btn"
-                            onClick={() => handleDelete(order.id)}
-                          >
-                            <FaTrash />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {currentOrders.map((order) => {
+                      const orderTotal = computeOrderTotal(order);
+                      return (
+                        <tr key={order.id}>
+                          <td>{order.id}</td>
+                          <td>{order.user_id || "Misafir"}</td>
+                          <td>{orderTotal} TL</td>
+                          <td>
+                            <span
+                              className={`status-badge status-${order.order_status}`}
+                            >
+                              {order.order_status}
+                            </span>
+                          </td>
+                          <td>{new Date(order.order_time).toLocaleString()}</td>
+                          <td>
+                            <button
+                              className="action-btn edit-btn"
+                              onClick={() => handleEditClick(order)}
+                            >
+                              <FaEdit />
+                            </button>
+                            <button
+                              className="action-btn delete-btn"
+                              onClick={() => handleDelete(order.id)}
+                            >
+                              <FaTrash />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -470,7 +556,8 @@ const AdminOrders = () => {
               <div className="order-details">
                 <h3>Kargo Bilgileri</h3>
                 <p>
-                  <strong>Sipariş Tutarı:</strong> 25,920.00 TL
+                  <strong>Sipariş Tutarı:</strong>{" "}
+                  {computeOrderTotal(selectedOrder)} TL
                 </p>
                 <p>
                   <strong>Sipariş Türü:</strong> EFT / Havale
