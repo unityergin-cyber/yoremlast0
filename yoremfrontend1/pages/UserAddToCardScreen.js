@@ -30,22 +30,26 @@ function UserAddToCardScreen({ navigation }) {
 
     // SeÃ§enekleri guvenli sekilde parse edip fiyat ayarlamalarini topla
     const parseOptionsAndPrice = (options) => {
-        const result = { parsed: null, rawString: "", price: 0 };
+        const result = { parsed: null, rawString: "", price: 0, hasPrice: false };
         if (!options) return result;
 
         const raw = typeof options === "string" ? options.trim() : options;
         if (typeof raw === "string") result.rawString = raw;
+
+        const tryParse = (value) => {
+            try {
+                return JSON.parse(value);
+            } catch {
+                return null;
+            }
+        };
 
         if (typeof raw === "string" && raw) {
             const looksComplete =
                 (raw.startsWith("[") && raw.endsWith("]")) ||
                 (raw.startsWith("{") && raw.endsWith("}"));
             if (looksComplete) {
-                try {
-                    result.parsed = JSON.parse(raw);
-                } catch (e) {
-                    console.warn("Options parse failed:", e);
-                }
+                result.parsed = tryParse(raw) || tryParse(raw.replace(/'/g, '"'));
             }
         } else if (Array.isArray(raw) || typeof raw === "object") {
             result.parsed = raw;
@@ -56,7 +60,10 @@ function UserAddToCardScreen({ navigation }) {
                 const mod = val?.price_adjustment ?? val?.priceModifier ?? val?.price_modifier;
                 if (mod !== undefined && mod !== null) {
                     const adj = parseFloat(mod);
-                    if (!isNaN(adj)) result.price += adj;
+                    if (!isNaN(adj)) {
+                        result.price += adj;
+                        result.hasPrice = true;
+                    }
                 }
             });
         };
@@ -71,8 +78,8 @@ function UserAddToCardScreen({ navigation }) {
             });
         }
 
-        if (result.price === 0 && typeof raw === "string") {
-            const regex = /"price(?:_)?(?:adjustment|modifier)"\s*:\s*(-?\d+(?:\.\d+)?)/gi;
+        if (!result.hasPrice && typeof raw === "string") {
+            const regex = /["']price(?:_)?(?:adjustment|modifier)["']\s*:\s*(-?\d+(?:\.\d+)?)/gi;
             let match;
             while ((match = regex.exec(raw)) !== null) {
                 const adj = parseFloat(match[1]);
@@ -84,8 +91,7 @@ function UserAddToCardScreen({ navigation }) {
     };
 
     // SeÃ§eneklerin metinsel gosterimi
-    const buildOptionText = (parsedOptions) => {
-        if (!parsedOptions) return "Standart";
+    const buildOptionText = (parsedOptions, rawString = "") => {
         const parts = [];
 
         if (Array.isArray(parsedOptions)) {
@@ -110,6 +116,18 @@ function UserAddToCardScreen({ navigation }) {
                     parts.push(option.value);
                 }
             });
+        }
+
+        if (parts.length === 0 && rawString) {
+            const valueRegex = /["']value["']\s*:\s*["']([^"']+)["']/gi;
+            let match;
+            while ((match = valueRegex.exec(rawString)) !== null) {
+                if (match[1]) parts.push(match[1]);
+            }
+            if (parts.length === 0) {
+                const cleaned = rawString.replace(/[\[\]{}"]/g, "").trim();
+                if (cleaned) parts.push(cleaned);
+            }
         }
 
         return parts.length > 0 ? parts.join(" | ") : "Standart";
@@ -161,7 +179,11 @@ function UserAddToCardScreen({ navigation }) {
                                           if (responseData.cart && Array.isArray(responseData.cart)) {
                         const formatlanmisSepet = responseData.cart.map(item => {
                             const { parsed, rawString, price: optionsPrice } = parseOptionsAndPrice(item.options);
-                            const seceneklerText = buildOptionText(parsed) || (rawString ? rawString.substring(0, 20) : 'Standart');
+                            const seceneklerText = buildOptionText(parsed, rawString);
+                            const baseFiyat = parseFloat(item.base_price || item.unit_price || item.price || 0);
+                            const serverOptionsPrice = item.options_price !== undefined ? parseFloat(item.options_price) || 0 : null;
+                            // Sunucunun döndürdüğü base_price genellikle seçenek dahil; varsa onu kullan, yoksa manuel ekle
+                            const toplamFiyat = serverOptionsPrice !== null ? baseFiyat : baseFiyat + optionsPrice;
                             
                             return {
                                 id: item.id,
@@ -380,6 +402,7 @@ function UserAddToCardScreen({ navigation }) {
                         />
                         <View style={styles.urunBilgileri}>
                             <Text style={styles.urunAdi}>{urun.ad}</Text>
+                            <Text style={styles.urunBoyut}>{urun.boyut}</Text>
                             
                             <View style={styles.adetContainer}>
                                 <TouchableOpacity 
@@ -590,6 +613,11 @@ const styles = StyleSheet.create({
         color: '#333',
         marginBottom: 4,
     },
+    urunBoyut: {
+        fontSize: 14,
+        color: '#555',
+        marginBottom: 6,
+    },
     adetContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -710,4 +738,3 @@ const styles = StyleSheet.create({
 });
     
 export default UserAddToCardScreen;
-
