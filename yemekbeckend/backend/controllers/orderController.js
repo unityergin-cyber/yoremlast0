@@ -539,6 +539,7 @@ const getAllOrders = (req, res) => {
       sc.full_name AS coupon_created_by_name,
       u.full_name AS user_full_name,
       u.email AS user_email,
+      a.address_description,
       u.phone AS user_phone
     FROM 
       orders o
@@ -807,6 +808,7 @@ const getOrderById = (req, res) => {
     sc.full_name AS coupon_created_by_name,
     u.full_name AS user_full_name,
     u.email AS user_email,
+    a.address_description,
     u.phone AS user_phone
   FROM 
     orders o
