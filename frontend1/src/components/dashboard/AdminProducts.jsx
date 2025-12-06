@@ -8,7 +8,7 @@ import Switch from "react-switch";
 import "./Orders.css";
 
 const AdminProducts = () => {
-  const { admin, logout } = useContext(AuthContext);
+  const { admin } = useContext(AuthContext);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
@@ -120,14 +120,11 @@ const AdminProducts = () => {
         await api.delete(`/api/products/${productId}`);
         setProducts(products.filter((product) => product.id !== productId));
       } catch (err) {
-        setError("Ürün silinirken bir hata oluştu.");
+        const errorMessage =
+        err.response?.data?.error || "ürün silinirken bir hata oluştu";
+        setError(errorMessage);
       }
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate("/admin/login");
   };
 
   const toggleSidebar = () => {
@@ -333,7 +330,7 @@ const AdminProducts = () => {
                           >
                             <FaTrash />
                           </button>
-                          {/* <Switch
+                          <Switch
                             checked={product.is_active}
                             onChange={(checked) =>
                               handleSwitchChange(product.id, checked)
@@ -344,7 +341,7 @@ const AdminProducts = () => {
                             onHandleColor="#fff"
                             height={20}
                             width={40}
-                          /> */}
+                          />
                         </td>
                       </tr>
                     ))}

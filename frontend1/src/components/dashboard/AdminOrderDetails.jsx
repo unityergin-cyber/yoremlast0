@@ -7,67 +7,7 @@ const AdminOrderDetails = ({ order }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Seçenek fiyatlarını hesapla
-  const getOptionsAdjustment = (options) => {
-    let optionsPrice = 0;
-    if (!options) return optionsPrice;
-
-    const raw = typeof options === "string" ? options.trim() : options;
-    let parsed = null;
-
-    // JSON parse et
-    if (typeof raw === "string" && raw) {
-      const looksComplete =
-        (raw.startsWith("[") && raw.endsWith("]")) ||
-        (raw.startsWith("{") && raw.endsWith("}"));
-      if (looksComplete) {
-        try {
-          parsed = JSON.parse(raw);
-        } catch (e) {
-          console.warn("Options parse failed:", e);
-        }
-      }
-    } else if (Array.isArray(raw) || typeof raw === "object") {
-      parsed = raw;
-    }
-
-    // Fiyat ayarlamalarını topla
-    const addAdjustments = (vals = []) => {
-      vals.forEach((val) => {
-        const mod = val?.price_adjustment ?? val?.priceModifier ?? val?.price_modifier;
-        if (mod !== undefined && mod !== null) {
-          const adj = parseFloat(mod);
-          if (!isNaN(adj)) {
-            optionsPrice += adj;
-          }
-        }
-      });
-    };
-
-    if (Array.isArray(parsed)) {
-      parsed.forEach((opt) => {
-        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
-      });
-    } else if (parsed && typeof parsed === "object") {
-      Object.values(parsed).forEach((opt) => {
-        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
-      });
-    }
-
-    // Eğer parse başarısız olduysa, regex ile dene
-    if (optionsPrice === 0 && typeof raw === "string") {
-      const regex = /"price(?:_)?(?:adjustment|modifier)"\s*:\s*(-?\d+(?:\.\d+)?)/gi;
-      let match;
-      while ((match = regex.exec(raw)) !== null) {
-        const adj = parseFloat(match[1]);
-        if (!isNaN(adj)) optionsPrice += adj;
-      }
-    }
-
-    return optionsPrice;
-  };
-
-  // Ürün seçeneklerini formatla
+  // ✅ Ürün seçeneklerini formatla (sadece görüntüleme için)
   const formatOptions = (options) => {
     if (!options) return null;
 
@@ -92,10 +32,10 @@ const AdminOrderDetails = ({ order }) => {
       parsed.forEach((opt) => {
         if (opt && Array.isArray(opt.values)) {
           opt.values.forEach((val) => {
-            if (val?.name) {
+            if (val?.value || val?.name) {
               const price = val?.price_adjustment ?? val?.priceModifier ?? val?.price_modifier;
               optionsList.push({
-                name: val.name,
+                name: val.value || val.name,
                 price: price ? parseFloat(price) : 0
               });
             }
@@ -106,10 +46,10 @@ const AdminOrderDetails = ({ order }) => {
       Object.values(parsed).forEach((opt) => {
         if (opt && Array.isArray(opt.values)) {
           opt.values.forEach((val) => {
-            if (val?.name) {
+            if (val?.value || val?.name) {
               const price = val?.price_adjustment ?? val?.priceModifier ?? val?.price_modifier;
               optionsList.push({
-                name: val.name,
+                name: val.value || val.name,
                 price: price ? parseFloat(price) : 0
               });
             }
@@ -158,17 +98,18 @@ const AdminOrderDetails = ({ order }) => {
 
   if (!displayOrder) return <div>Sipariş bulunamadı.</div>;
 
-  // Toplam tutarı hesapla
+  // ✅ DÜZELTİLMİŞ: Toplam tutarı hesapla
+  // unit_price ZATEN seçenek fiyatlarını içeriyor
   const calculateTotal = () => {
     if (!displayOrder.order_items || displayOrder.order_items.length === 0) {
       return parseFloat(displayOrder.total_amount || 0).toFixed(2);
     }
 
+    // ✅ unit_price zaten seçenek dahil, sadece çarp
     const total = displayOrder.order_items.reduce((sum, item) => {
-      const basePrice = parseFloat(item.unit_price || item.price || 0);
+      const unitPrice = parseFloat(item.unit_price || item.price || 0);
       const qty = item.quantity || 1;
-      const optionAdj = getOptionsAdjustment(item.options);
-      return sum + (basePrice + optionAdj) * qty;
+      return sum + (unitPrice * qty);
     }, 0);
 
     return total.toFixed(2);
@@ -211,6 +152,11 @@ const AdminOrderDetails = ({ order }) => {
         <p>
           <strong>Adres:</strong> {formatAddress(displayOrder)}
         </p>
+        {displayOrder.address_description && (
+          <p>
+            <strong>Adres Tarifi:</strong> {displayOrder.address_description}
+          </p>
+        )}
       </div>
 
       <div className="receipt-payment">
@@ -240,10 +186,10 @@ const AdminOrderDetails = ({ order }) => {
             </thead>
             <tbody>
               {displayOrder.order_items.map((item, index) => {
-                const basePrice = parseFloat(item.unit_price || item.price || 0);
+                // ✅ unit_price zaten seçenek dahil
+                const unitPrice = parseFloat(item.unit_price || item.price || 0);
                 const qty = item.quantity || 1;
-                const optionAdj = getOptionsAdjustment(item.options);
-                const itemTotal = (basePrice + optionAdj) * qty;
+                const itemTotal = unitPrice * qty;
                 const options = formatOptions(item.options);
 
                 return (
@@ -256,13 +202,20 @@ const AdminOrderDetails = ({ order }) => {
                           {options && options.length > 0 && (
                             <div style={{ fontSize: "0.85em", color: "#666", marginTop: "4px" }}>
                               {options.map((opt, i) => (
-                                <div key={i}>+ {opt.name}</div>
+                                <div key={i}>
+                                  + {opt.name}
+                                  {opt.price > 0 && (
+                                    <span style={{ color: "#FF6B00" }}>
+                                      {" "}(+{opt.price.toFixed(2)} TL)
+                                    </span>
+                                  )}
+                                </div>
                               ))}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td>{(basePrice + optionAdj).toFixed(2)} TL</td>
+                      <td>{unitPrice.toFixed(2)} TL</td>
                       <td>{itemTotal.toFixed(2)} TL</td>
                     </tr>
                   </React.Fragment>
@@ -312,7 +265,6 @@ const formatAddress = (order) => {
   let addressParts = [];
   if (order.street) addressParts.push(order.street);
   if (order.address_detail) addressParts.push(order.address_detail);
-  if (order.address_description) addressParts.push(order.address_description);
   if (order.neighborhood) addressParts.push(order.neighborhood);
   if (order.district) addressParts.push(order.district);
   if (order.city) addressParts.push(order.city);

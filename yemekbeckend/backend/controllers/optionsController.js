@@ -39,7 +39,6 @@ const getAllOptions = (req, res) => {
       
       values.forEach(v => {
         if (optionsMap.has(v.option_id)) {
-          // Değer nesnesinden gereksiz alanları kaldırabilirsiniz
           const { option_id, ...value } = v;
           optionsMap.get(v.option_id).values.push(value);
         }
@@ -266,13 +265,14 @@ const deleteOptionValue = (req, res) => {
 
 // ==================== PRODUCT OPTIONS ====================
 
-// Ürüne seçenekleri ata
+// ✅ DÜZELTME: Boş array'i kabul et ve tüm seçenekleri kaldır
 const assignOptionsToProduct = (req, res) => {
   const { productId } = req.params;
   const { options } = req.body;
 
-  if (!Array.isArray(options) || options.length === 0) {
-    return res.status(400).json({ error: "Seçenekler dizisi boş olamaz" });
+  // ✅ Array kontrolü yap ama boş array'e izin ver
+  if (!Array.isArray(options)) {
+    return res.status(400).json({ error: "Seçenekler dizisi gereklidir" });
   }
 
   // Ürün kontrol et
@@ -295,6 +295,14 @@ const assignOptionsToProduct = (req, res) => {
         (deleteErr) => {
           if (deleteErr) {
             return res.status(500).json({ error: "Seçenekler silinirken hata oluştu" });
+          }
+
+          // ✅ Eğer options boşsa, sadece silme işlemi yap ve başarılı dön
+          if (options.length === 0) {
+            return res.status(200).json({
+              status: "success",
+              message: "Ürün seçenekleri başarıyla kaldırıldı",
+            });
           }
 
           // Yeni seçenekleri ekle
@@ -358,6 +366,7 @@ const getProductOptions = (req, res) => {
       return res.status(500).json({ error: "Seçenekler getirilemedi" });
     }
 
+    // ✅ Seçenek yoksa boş array dön (hata değil)
     if (options.length === 0) {
       return res.status(200).json([]);
     }

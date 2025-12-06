@@ -18,17 +18,14 @@ import { useKullanici } from '../context/KullaniciContext';
 import BottomTabBar from '../components/BottomTabBar';
 
 const { height } = Dimensions.get('window');
-// TabBar için daha büyük bir yükseklik değeri (platform özel)
 const BOTTOM_TAB_HEIGHT = Platform.OS === 'ios' ? 85 : 65;
-// Ödeme alanı yüksekliği - ARTIRILDI
-const PAYMENT_AREA_HEIGHT = 180; // Orijinal değer 140 idi
+const PAYMENT_AREA_HEIGHT = 180;
 
 function UserAddToCardScreen({ navigation }) {
     const { siparisDetaylari, userToken, isLoggedIn } = useKullanici();
     const [sepet, setSepet] = useState([]);
     const [yukleniyor, setYukleniyor] = useState(true);
 
-    // SeÃ§enekleri guvenli sekilde parse edip fiyat ayarlamalarini topla
     const parseOptionsAndPrice = (options) => {
         const result = { parsed: null, rawString: "", price: 0, hasPrice: false };
         if (!options) return result;
@@ -90,7 +87,6 @@ function UserAddToCardScreen({ navigation }) {
         return result;
     };
 
-    // SeÃ§eneklerin metinsel gosterimi
     const buildOptionText = (parsedOptions, rawString = "") => {
         const parts = [];
 
@@ -130,7 +126,7 @@ function UserAddToCardScreen({ navigation }) {
             }
         }
 
-        return parts.length > 0 ? parts.join(" | ") : "Standart";
+        return parts.length > 0 ? parts.join(" • ") : "";
     };
 
     useEffect(() => {
@@ -144,76 +140,74 @@ function UserAddToCardScreen({ navigation }) {
     }, [siparisDetaylari]);
 
     const sepetVerileriniGetir = async () => {
-    try {
-        setYukleniyor(true);
-        
-        const token = await AsyncStorage.getItem('userToken');
-        if (!token) {
-            setYukleniyor(false);
-            return;
-        }
-    
-        console.log("Sepet API URL'si:", `${API_URL}/api/products/cart`);
-        
-        const response = await fetch(`${API_URL}/api/products/cart`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+        try {
+            setYukleniyor(true);
+            
+            const token = await AsyncStorage.getItem('userToken');
+            if (!token) {
+                setYukleniyor(false);
+                return;
             }
-        });
-    
-        console.log('Sepet API Yanıt Durumu:', response.status);
         
-        const responseText = await response.text();
-        console.log('Sepet API Yanıt Gövdesi:', responseText);
+            const response = await fetch(`${API_URL}/api/products/cart`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
         
-        if (responseText.trim()) {
-            try {
-                const responseData = JSON.parse(responseText);
-                console.log("Çözümlenmiş sepet verisi:", responseData);
-                
-                if (responseData.cart && Array.isArray(responseData.cart)) {
-                    // ✅ DÜZELTME: Backend artık base_price'a seçenek fiyatını dahil ediyor
-                    const formatlanmisSepet = responseData.cart.map(item => {
-                        const { parsed, rawString } = parseOptionsAndPrice(item.options);
-                        const seceneklerText = buildOptionText(parsed, rawString);
-                        
-                        // ✅ Backend'den gelen base_price zaten seçenek dahil
-                        const birimFiyat = parseFloat(item.base_price || item.unit_price || item.price || 0);
-                        
-                        return {
-                            id: item.id,
-                            ad: item.name || "Isimsiz urun",
-                            resim: item.image_url,
-                            fiyat: birimFiyat, // ✅ Artık seçenek dahil
-                            adet: item.quantity || 1,
-                            boyut: seceneklerText,
-                            productId: item.product_id
-                        };
-                    });
+            const responseText = await response.text();
+            
+            if (responseText.trim()) {
+                try {
+                    const responseData = JSON.parse(responseText);
                     
-                    setSepet(formatlanmisSepet);
-                } else {
+                    if (responseData.cart && Array.isArray(responseData.cart)) {
+                        const formatlanmisSepet = responseData.cart.map(item => {
+                            const { parsed, rawString } = parseOptionsAndPrice(item.options);
+                            const seceneklerText = buildOptionText(parsed, rawString);
+                            const birimFiyat = parseFloat(item.base_price || item.unit_price || item.price || 0);
+                            
+                            return {
+                                id: item.id,
+                                ad: item.name || "Isimsiz urun",
+                                resim: item.image_url,
+                                fiyat: birimFiyat,
+                                adet: item.quantity || 1,
+                                boyut: seceneklerText,
+                                productId: item.product_id
+                            };
+                        });
+                        
+                        setSepet(formatlanmisSepet);
+                    } else {
+                        setSepet([]);
+                    }
+                } catch (jsonError) {
+                    console.error('JSON çözümleme hatası:', jsonError);
                     setSepet([]);
                 }
-            } catch (jsonError) {
-                console.error('JSON çözümleme hatası:', jsonError);
+            } else {
                 setSepet([]);
             }
-        } else {
+        } catch (error) {
+            console.error('Sepet verileri yüklenirken hata oluştu:', error);
             setSepet([]);
+        } finally {
+            setYukleniyor(false);
         }
-    } catch (error) {
-        console.error('Sepet verileri yüklenirken hata oluştu:', error);
-        setSepet([]);
-    } finally {
-        setYukleniyor(false);
-    }
-};
+    };
 
     const updateCartItemQuantity = async (id, newQuantity) => {
         try {
+            // Optimistic update
+            setSepet(prevSepet => 
+                prevSepet.map(urun => 
+                    urun.id === id ? { ...urun, adet: newQuantity } : urun
+                )
+            );
+
             const response = await fetch(`${API_URL}/api/products/cart/${id}`, {
                 method: 'PUT',
                 headers: {
@@ -228,11 +222,10 @@ function UserAddToCardScreen({ navigation }) {
             const responseData = await response.json();
 
             if (!response.ok) {
+                // Hata durumunda geri yükle
+                await sepetVerileriniGetir();
                 throw new Error(responseData.details || responseData.error || 'Sepet güncellenemedi');
             }
-
-            // Sepeti yeniden yükle
-            await sepetVerileriniGetir();
         } catch (error) {
             console.error('Sepet güncelleme hatası:', error);
             Alert.alert(
@@ -263,8 +256,6 @@ function UserAddToCardScreen({ navigation }) {
                 Alert.alert('Giriş Yapın', 'Bu işlemi yapmak için lütfen giriş yapın');
                 return;
             }
-            
-            setYukleniyor(true);
 
             const response = await fetch(`${API_URL}/api/products/cart/${id}`, {
                 method: 'DELETE',
@@ -278,8 +269,8 @@ function UserAddToCardScreen({ navigation }) {
                 throw new Error(`Ürün sepetten kaldırılamadı. HTTP Kodu: ${response.status}`);
             }
 
-            const guncelSepet = sepet.filter(urun => urun.id !== id);
-            setSepet(guncelSepet);
+            // Optimistic update
+            setSepet(prevSepet => prevSepet.filter(urun => urun.id !== id));
             
             Alert.alert(
                 'Başarılı',
@@ -293,8 +284,7 @@ function UserAddToCardScreen({ navigation }) {
                 `Ürün sepetten kaldırılırken bir sorun oluştu: ${error.message}`,
                 [{ text: 'Tamam' }]
             );
-        } finally {
-            setYukleniyor(false);
+            await sepetVerileriniGetir();
         }
     };
 
@@ -317,7 +307,7 @@ function UserAddToCardScreen({ navigation }) {
     if (yukleniyor && sepet.length === 0) {
         return (
             <View style={styles.yuklemeContainer}>
-                <ActivityIndicator size="large" color="#007bff" />
+                <ActivityIndicator size="large" color="#FF6B00" />
                 <Text style={styles.yuklemeText}>Sepet yükleniyor...</Text>
                 <BottomTabBar />
             </View>
@@ -328,7 +318,7 @@ function UserAddToCardScreen({ navigation }) {
         return (
             <View style={styles.container}>
                 <View style={styles.ustOdemeBar}>
-                    <Text style={styles.ustOdemeBarBaslik}></Text>
+                    <Text style={styles.ustOdemeBarBaslik}>Sepetim</Text>
                 </View>
                 <View style={styles.bosSepetContainer}>
                     <Text style={styles.bosSepetText}>Sepetinizde ürün bulunmamaktadır.</Text>
@@ -345,24 +335,17 @@ function UserAddToCardScreen({ navigation }) {
     }
 
     const toplamFiyat = sepet.reduce((total, urun) => 
-    total + (urun.fiyat * urun.adet), 0
-        ).toFixed(2);
+        total + (urun.fiyat * urun.adet), 0
+    ).toFixed(2);
 
     return (
         <View style={styles.container}>
             <StatusBar backgroundColor="#f8f8f8" barStyle="dark-content" />
             
             <View style={styles.ustOdemeBar}>
-                <Text style={styles.ustOdemeBarBaslik}></Text>
+                <Text style={styles.ustOdemeBarBaslik}>Sepetim ({sepet.length})</Text>
             </View>
     
-            {yukleniyor && (
-                <View style={styles.overlaySpin}>
-                    <ActivityIndicator size="large" color="#007bff" />
-                </View>
-            )}
-    
-            {/* Ürünlerin olduğu bölüm - ScrollView ile */}
             <ScrollView 
                 style={styles.urunlerContainer} 
                 contentContainerStyle={styles.scrollContent}
@@ -387,7 +370,6 @@ function UserAddToCardScreen({ navigation }) {
                             }} 
                             style={styles.urunResmi}
                             onError={(error) => {
-                                // 404 hatalarını sessizce handle et (resim bulunamadı)
                                 const errorCode = error.nativeEvent?.error?.code;
                                 if (errorCode && errorCode !== 404) {
                                     console.warn('Sepet resim yükleme hatası:', {
@@ -398,16 +380,31 @@ function UserAddToCardScreen({ navigation }) {
                             }}
                         />
                         <View style={styles.urunBilgileri}>
-                            <Text style={styles.urunAdi}>{urun.ad}</Text>
-                            <Text style={styles.urunBoyut}>{urun.boyut}</Text>
+                            <Text style={styles.urunAdi} numberOfLines={2}>{urun.ad}</Text>
+                            
+                            {urun.boyut && urun.boyut !== "" && (
+                                <ScrollView 
+                                    style={styles.seceneklerScroll}
+                                    nestedScrollEnabled={true}
+                                    showsVerticalScrollIndicator={false}
+                                >
+                                    <Text style={styles.urunBoyut}>{urun.boyut}</Text>
+                                </ScrollView>
+                            )}
                             
                             <View style={styles.adetContainer}>
                                 <TouchableOpacity 
-                                    style={styles.adetButon}
+                                    style={[
+                                        styles.adetButon,
+                                        urun.adet <= 1 && styles.adetButonDisabled
+                                    ]}
                                     onPress={() => azaltAdet(urun.id)}
                                     disabled={urun.adet <= 1}
                                 >
-                                    <Text style={styles.adetButonText}>-</Text>
+                                    <Text style={[
+                                        styles.adetButonText,
+                                        urun.adet <= 1 && styles.adetButonTextDisabled
+                                    ]}>-</Text>
                                 </TouchableOpacity>
 
                                 <Text style={styles.adetText}>{urun.adet}</Text>
@@ -427,7 +424,6 @@ function UserAddToCardScreen({ navigation }) {
                             </Text>
                             <TouchableOpacity 
                                 onPress={() => urunuSepettenKaldir(urun.id)}
-                                disabled={yukleniyor}
                                 style={styles.silButon}
                             >
                                 <Text style={styles.silButonText}>Sil</Text>
@@ -436,11 +432,9 @@ function UserAddToCardScreen({ navigation }) {
                     </View>
                 ))}
                 
-                {/* Alttaki ödeme alanı ve TabBar için boşluk */}
                 <View style={styles.paddingBottom} />
             </ScrollView>
     
-            {/* Ödeme Yapma Alanı - Daha yüksek pozisyonda */}
             <View style={styles.altContainer}>
                 <View style={styles.toplamContainer}>
                     <Text style={styles.toplamBaslik}>Toplam</Text>
@@ -449,13 +443,12 @@ function UserAddToCardScreen({ navigation }) {
                 <TouchableOpacity 
                     style={styles.odemeButon}
                     onPress={handlePayButton}
-                    disabled={yukleniyor || sepet.length === 0}
+                    disabled={sepet.length === 0}
                 >
                     <Text style={styles.odemeButonText}>Ödeme Yap</Text>
                 </TouchableOpacity>
             </View>
             
-            {/* TabBar bileşeni kendi absolute pozisyonunu kullanıyor */}
             <BottomTabBar />
         </View>
     );
@@ -475,40 +468,9 @@ const styles = StyleSheet.create({
     },
     yuklemeText: {
         marginTop: 12,
-        marginBottom: 100, // BottomTabBar için boşluk
+        marginBottom: 100,
         fontSize: 16,
         color: '#666',
-    },
-    hataContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#f8f8f8',
-    },
-    hataText: {
-        fontSize: 16,
-        color: '#d32f2f',
-        textAlign: 'center',
-        marginBottom: 20,
-    },
-    yenidenDeneButton: {
-        backgroundColor: '#FF6B00',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 25,
-        shadowColor: "#FF6B00",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.2,
-        shadowRadius: 3.84,
-        elevation: 3,
-    },
-    yenidenDeneButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
     },
     bosSepetContainer: {
         flex: 1,
@@ -516,7 +478,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 20,
         backgroundColor: '#f8f8f8',
-        paddingBottom: 120, // TabBar için alt boşluk
+        paddingBottom: 120,
     },
     bosSepetText: {
         fontSize: 18,
@@ -565,14 +527,14 @@ const styles = StyleSheet.create({
     },
     urunlerContainer: {
         flex: 1,
-        width: '100%', // Tam genişlik
+        width: '100%',
     },
     scrollContent: {
         padding: 10,
-        paddingBottom: BOTTOM_TAB_HEIGHT + PAYMENT_AREA_HEIGHT + 30, // TabBar + Ödeme alanı için daha fazla boşluk
+        paddingBottom: BOTTOM_TAB_HEIGHT + PAYMENT_AREA_HEIGHT + 30,
     },
     paddingBottom: {
-        height: BOTTOM_TAB_HEIGHT + PAYMENT_AREA_HEIGHT + 30, // TabBar + Ödeme alanı için ek boşluk
+        height: BOTTOM_TAB_HEIGHT + PAYMENT_AREA_HEIGHT + 30,
     },
     urunKarti: {
         flexDirection: 'row',
@@ -589,89 +551,107 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 3.84,
         elevation: 3,
-        alignItems: 'center',
-        height: 140, // Sabit yükseklik
+        alignItems: 'stretch',
+        minHeight: 120,
     },
     urunResmi: {
         width: 80,
         height: 80,
         borderRadius: 8,
-        marginRight: 15
+        marginRight: 15,
+        alignSelf: 'center',
     },
     urunBilgileri: {
         flex: 1,
         justifyContent: 'space-between',
-        height: '100%',
-        paddingVertical: 5,
+        paddingVertical: 2,
     },
     urunAdi: {
         fontSize: 16,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 4,
+        marginBottom: 6,
+        lineHeight: 20,
+    },
+    seceneklerScroll: {
+        maxHeight: 50,
+        marginBottom: 8,
+        flexGrow: 0,
     },
     urunBoyut: {
-        fontSize: 14,
-        color: '#555',
-        marginBottom: 6,
+        fontSize: 13,
+        color: '#666',
+        lineHeight: 18,
+        paddingRight: 5,
     },
     adetContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
+        marginTop: 'auto',
     },
     adetButon: {
         backgroundColor: '#f5f5f5',
         padding: 0,
         borderRadius: 20,
-        width: 30,
-        height: 30,
+        width: 32,
+        height: 32,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: '#e0e0e0',
+    },
+    adetButonDisabled: {
+        backgroundColor: '#fafafa',
+        opacity: 0.5,
     },
     adetButonText: {
         fontSize: 18,
         color: '#333',
+        fontWeight: '600',
+    },
+    adetButonTextDisabled: {
+        color: '#999',
     },
     adetText: {
-        marginHorizontal: 12,
+        marginHorizontal: 14,
         fontSize: 16,
         color: '#333',
+        fontWeight: '600',
+        minWidth: 20,
+        textAlign: 'center',
     },
     fiyatContainer: {
         alignItems: 'flex-end',
         justifyContent: 'space-between',
-        height: '100%',
-        paddingVertical: 10,
-        width: 80, // Sabit genişlik fiyat kısmı için
+        paddingVertical: 2,
+        width: 85,
     },
     fiyatText: {
         fontSize: 16,
         fontWeight: 'bold',
         color: '#FF6B00',
-        marginBottom: 10
+        marginBottom: 8,
     },
     silButon: {
-        backgroundColor: '#f5f5f5',
-        padding: 6,
+        backgroundColor: '#fff5f5',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: '#ffe0e0',
     },
     silButonText: {
         color: '#FF4136',
         fontSize: 13,
-        fontWeight: '500',
+        fontWeight: '600',
     },
     altContainer: {
         position: 'absolute',
-        bottom: BOTTOM_TAB_HEIGHT + 20, // TabBar yüksekliği + daha fazla boşluk
+        bottom: BOTTOM_TAB_HEIGHT + 20,
         left: 0,
         right: 0,
         padding: 15,
-        paddingTop: 25, // İçeriği daha yukarı taşımak için üst padding arttırıldı
+        paddingTop: 20,
         backgroundColor: 'white',
         borderTopWidth: 1,
         borderTopColor: '#f0f0f0',
@@ -683,14 +663,15 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 5,
-        zIndex: 90, // TabBar'dan düşük (TabBar zIndex: 999)
-        height: PAYMENT_AREA_HEIGHT, // Yükseklik arttırıldı
+        zIndex: 90,
+        height: PAYMENT_AREA_HEIGHT,
     },
     toplamContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         marginBottom: 15,
-        paddingVertical: 5,
+        paddingVertical: 8,
+        paddingHorizontal: 5,
     },
     toplamBaslik: {
         fontSize: 18,
@@ -698,13 +679,13 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     toplamFiyat: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
-        color: '#FF6B00'
+        color: '#FF6B00',
     },
     odemeButon: {
         backgroundColor: '#FF6B00',
-        padding: 15,
+        padding: 16,
         borderRadius: 25,
         alignItems: 'center',
         shadowColor: "#FF6B00",
@@ -712,26 +693,15 @@ const styles = StyleSheet.create({
             width: 0,
             height: 2,
         },
-        shadowOpacity: 0.2,
-        shadowRadius: 3.84,
-        elevation: 3,
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
     },
     odemeButonText: {
         color: 'white',
         fontWeight: 'bold',
-        fontSize: 16
+        fontSize: 16,
     },
-    overlaySpin: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000
-    }
 });
     
 export default UserAddToCardScreen;

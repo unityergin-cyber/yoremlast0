@@ -212,26 +212,30 @@ const ProductOptionsManagement = () => {
   };
 
   const handleAssignOptions = async () => {
-    if (!selectedProduct) {
-      message.warning('Lütfen bir ürün seçin');
-      return;
-    }
+  if (!selectedProduct) {
+    message.warning('Lütfen bir ürün seçin');
+    return;
+  }
 
-    try {
-      // ✅ DÜZELTİLMİŞ ENDPOINT
-      await api.post(`/api/options/product/${selectedProduct}/assign`, {
-        options: selectedProductOptions.map(optionId => ({
-          option_id: parseInt(optionId),
-          is_required: selectedRequiredOptions.includes(optionId),
-        })),
-      });
-      message.success('Seçenekler başarıyla atandı');
-      setAssignDrawerVisible(false);
-    } catch (error) {
-      console.error('Assign options error:', error);
-      message.error('Atama başarısız: ' + (error.response?.data?.error || error.message));
-    }
-  };
+  try {
+    // ✅ Boş array gönderilmesine izin ver
+    await api.post(`/api/options/product/${selectedProduct}/assign`, {
+      options: selectedProductOptions.map(optionId => ({
+        option_id: parseInt(optionId),
+        is_required: selectedRequiredOptions.includes(optionId),
+      })),
+    });
+    message.success(
+      selectedProductOptions.length === 0 
+        ? 'Ürün seçenekleri başarıyla kaldırıldı' 
+        : 'Seçenekler başarıyla atandı'
+    );
+    setAssignDrawerVisible(false);
+  } catch (error) {
+    console.error('Assign options error:', error);
+    message.error('Atama başarısız: ' + (error.response?.data?.error || error.message));
+  }
+};
 
   // ==================== RENDER ====================
 
@@ -358,7 +362,7 @@ const ProductOptionsManagement = () => {
                 Yeni Seçenek Ekle
               </Button>
               <Button type="primary" onClick={handleOpenDrawer}>
-                Ürüne Seçenek Ata
+                Seçenekleri Güncelle
               </Button>
             </Space>
           </div>
@@ -431,7 +435,7 @@ const ProductOptionsManagement = () => {
 
           {/* Ürüne Seçenek Atama Drawer */}
           <Drawer
-            title="Ürüne Seçenek Atama"
+            title="Ürün Seçenekleri Yönetimi"
             placement="right"
             width={700}
             onClose={() => setAssignDrawerVisible(false)}

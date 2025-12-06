@@ -27,80 +27,24 @@ const AdminOrders = () => {
 
   const ordersPerPage = 10;
 
-  // Seçenek fiyatlarını hesapla
-  const getOptionsAdjustment = (options) => {
-    let optionsPrice = 0;
-    if (!options) return optionsPrice;
-
-    const raw = typeof options === "string" ? options.trim() : options;
-    let parsed = null;
-
-    // JSON parse et
-    if (typeof raw === "string" && raw) {
-      const looksComplete =
-        (raw.startsWith("[") && raw.endsWith("]")) ||
-        (raw.startsWith("{") && raw.endsWith("}"));
-      if (looksComplete) {
-        try {
-          parsed = JSON.parse(raw);
-        } catch (e) {
-          console.warn("Options parse failed:", e);
-        }
-      }
-    } else if (Array.isArray(raw) || typeof raw === "object") {
-      parsed = raw;
-    }
-
-    // Fiyat ayarlamalarını topla
-    const addAdjustments = (vals = []) => {
-      vals.forEach((val) => {
-        const mod = val?.price_adjustment ?? val?.priceModifier ?? val?.price_modifier;
-        if (mod !== undefined && mod !== null) {
-          const adj = parseFloat(mod);
-          if (!isNaN(adj)) {
-            optionsPrice += adj;
-          }
-        }
-      });
-    };
-
-    if (Array.isArray(parsed)) {
-      parsed.forEach((opt) => {
-        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
-      });
-    } else if (parsed && typeof parsed === "object") {
-      Object.values(parsed).forEach((opt) => {
-        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
-      });
-    }
-
-    // Eğer parse başarısız olduysa, regex ile dene
-    if (optionsPrice === 0 && typeof raw === "string") {
-      const regex = /"price(?:_)?(?:adjustment|modifier)"\s*:\s*(-?\d+(?:\.\d+)?)/gi;
-      let match;
-      while ((match = regex.exec(raw)) !== null) {
-        const adj = parseFloat(match[1]);
-        if (!isNaN(adj)) optionsPrice += adj;
-      }
-    }
-
-    return optionsPrice;
-  };
-
-  // Sipariş toplamını hesapla (seçenekler dahil)
+  // ✅ DÜZELTİLMİŞ: Sipariş toplamını hesapla
+  // Backend'den gelen unit_price ZATEN seçenek fiyatlarını içeriyor
   const computeOrderTotal = (order) => {
     if (!order) return "0.00";
+    
     const items = order.order_items || order.orderItems || order.items || [];
+    
     if (!Array.isArray(items) || items.length === 0) {
+      // Eğer items yoksa, orders tablosundaki total_amount kullan
       return parseFloat(order.total_amount || 0).toFixed(2);
     }
 
+    // ✅ unit_price zaten seçenek dahil, sadece çarp
     const total = items.reduce((sum, item) => {
-      const basePrice = parseFloat(item.unit_price || item.price || 0);
+      const unitPrice = parseFloat(item.unit_price || item.price || 0);
       const qty = item.quantity || 1;
-      const optionAdj = getOptionsAdjustment(item.options);
       
-      return sum + (basePrice + optionAdj) * qty;
+      return sum + (unitPrice * qty);
     }, 0);
 
     return total.toFixed(2);

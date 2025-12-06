@@ -2,27 +2,17 @@ import React, { useContext, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
 import api from "../../services/api";
-import {
-  FaTachometerAlt,
-  FaShoppingCart,
-  FaUsers,
-  FaCog,
-  FaEdit,
-  FaTrash,
-  FaPrint,
-  FaShareAlt,
-  FaSyncAlt,
-  FaEnvelope,
-  FaUndo,
-} from "react-icons/fa";
-import { CiLogout } from "react-icons/ci";
+import AdminOrderDetails from "./AdminOrderDetails";
+import StatusUpdateModal from "./StatusUpdateModal";
+import { FaEdit, FaTrash, FaPrint, FaSyncAlt } from "react-icons/fa";
 import Sidebar from "./Sidebar";
 import "./Orders.css";
 
 const AdminOrders = () => {
-  const { admin, logout } = useContext(AuthContext);
+  const { admin } = useContext(AuthContext);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -30,12 +20,35 @@ const AdminOrders = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(() => {
-    return parseInt(searchParams.get("page")) || 1;
-  });
+  const [currentPage, setCurrentPage] = useState(() => parseInt(searchParams.get("page")) || 1);
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+
   const ordersPerPage = 10;
+
+  // ✅ DÜZELTİLMİŞ: Sipariş toplamını hesapla
+  // Backend'den gelen unit_price ZATEN seçenek fiyatlarını içeriyor
+  const computeOrderTotal = (order) => {
+    if (!order) return "0.00";
+    
+    const items = order.order_items || order.orderItems || order.items || [];
+    
+    if (!Array.isArray(items) || items.length === 0) {
+      // Eğer items yoksa, orders tablosundaki total_amount kullan
+      return parseFloat(order.total_amount || 0).toFixed(2);
+    }
+
+    // ✅ unit_price zaten seçenek dahil, sadece çarp
+    const total = items.reduce((sum, item) => {
+      const unitPrice = parseFloat(item.unit_price || item.price || 0);
+      const qty = item.quantity || 1;
+      
+      return sum + (unitPrice * qty);
+    }, 0);
+
+    return total.toFixed(2);
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -57,20 +70,14 @@ const AdminOrders = () => {
       setLoading(true);
       try {
         const response = await api.get("/api/orders/all");
-        console.log("Orders Response:", response.data);
         setOrders(response.data.data || []);
         setFilteredOrders(response.data.data || []);
       } catch (err) {
-        console.error("Fetch Orders Error:", err);
         setError(err.response?.data?.error || "Siparişler getirilemedi.");
       } finally {
         setLoading(false);
       }
     };
-    if (admin) {
-      fetchOrders();
-    }
-
     if (admin) {
       fetchOrders();
     }
@@ -81,25 +88,20 @@ const AdminOrders = () => {
     if (searchTerm) {
       filtered = filtered.filter(
         (order) =>
-          order.id.toString().includes(searchTerm) ||
+          order.id?.toString().includes(searchTerm) ||
+          (order.user_full_name &&
+            order.user_full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
           (order.user_id && order.user_id.toString().includes(searchTerm))
       );
     }
     if (statusFilter !== "all") {
-      filtered = filtered.filter(
-        (order) => order.order_status === statusFilter
-      );
+      filtered = filtered.filter((order) => order.order_status === statusFilter);
     }
     setFilteredOrders(filtered);
 
     const pageFromUrl = parseInt(searchParams.get("page")) || 1;
-    if (
-      filtered.length > 0 &&
-      pageFromUrl > Math.ceil(filtered.length / ordersPerPage)
-    ) {
-      setCurrentPage(1);
-      setSearchParams({ page: "1" });
-    } else if (searchTerm || statusFilter !== "all") {
+    const maxPage = Math.max(1, Math.ceil(filtered.length / ordersPerPage));
+    if (pageFromUrl > maxPage || searchTerm || statusFilter !== "all") {
       setCurrentPage(1);
       setSearchParams({ page: "1" });
     } else {
@@ -108,7 +110,8 @@ const AdminOrders = () => {
   }, [searchTerm, statusFilter, orders, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (parseInt(searchParams.get("page")) !== currentPage) {
+    const pageParam = parseInt(searchParams.get("page"));
+    if (pageParam !== currentPage) {
       setSearchParams({ page: currentPage.toString() });
     }
   }, [currentPage, searchParams, setSearchParams]);
@@ -122,11 +125,8 @@ const AdminOrders = () => {
 
   const indexOfLastOrder = currentPage * ordersPerPage;
   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
-  const currentOrders = filteredOrders.slice(
-    indexOfFirstOrder,
-    indexOfLastOrder
-  );
-  const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
+  const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPerPage));
 
   const handlePrevPage = () => {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
@@ -144,12 +144,10 @@ const AdminOrders = () => {
     if (window.confirm("Bu siparişi silmek istediğinizden emin misiniz?")) {
       try {
         await api.delete(`/api/orders/${orderId}`);
-        setOrders(orders.filter((order) => order.id !== orderId));
+        setOrders((prev) => prev.filter((order) => order.id !== orderId));
         setIsEditPanelOpen(false);
       } catch (err) {
-        setError(
-          err.response?.data?.error || "Sipariş silinirken bir hata oluştu."
-        );
+        setError(err.response?.data?.error || "Sipariş silinirken bir hata oluştu.");
       }
     }
   };
@@ -161,119 +159,51 @@ const AdminOrders = () => {
 
   const handleCloseEditPanel = () => {
     setIsEditPanelOpen(false);
-    setTimeout(() => setSelectedOrder(null), 500);
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate("/admin/login");
+    setTimeout(() => setSelectedOrder(null), 300);
   };
 
   const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
+    setIsSidebarOpen((prev) => !prev);
   };
 
   const handlePrint = () => {
-    alert("Yazdır butonuna tıklandı!");
+    window.print();
   };
 
-  const handleTransferOrders = () => {
-    alert("Siparişleri Aktar butonuna tıklandı!");
+  const handleOpenStatusModal = () => {
+    setIsStatusModalOpen(true);
   };
 
-  const handleUpdateStatus = () => {
-    alert("Durumu Güncelle butonuna tıklandı!");
+  const handleCloseStatusModal = () => {
+    setIsStatusModalOpen(false);
   };
 
-  const handleSendMail = () => {
-    alert("Mail Gönder butonuna tıklandı!");
+  const handleStatusUpdate = (newStatus) => {
+    setOrders(
+      orders.map((order) =>
+        order.id === selectedOrder.id ? { ...order, order_status: newStatus } : order
+      )
+    );
+    setSelectedOrder({ ...selectedOrder, order_status: newStatus });
   };
 
-  const handleReturnOperations = () => {
-    alert("İade İşlemleri butonuna tıklandı!");
-  };
-
-  const getOptionsAdjustment = (options) => {
-    // Opsiyon verilerinden price adjustment/modifier değerlerini topla
-    let optionsPrice = 0;
-    if (!options) return optionsPrice;
-
-    const raw = typeof options === "string" ? options.trim() : options;
-    let parsed = null;
-
-    if (typeof raw === "string" && raw) {
-      const looksComplete =
-        (raw.startsWith("[") && raw.endsWith("]")) ||
-        (raw.startsWith("{") && raw.endsWith("}"));
-      if (looksComplete) {
-        try {
-          parsed = JSON.parse(raw);
-        } catch (e) {
-          console.warn("Options parse failed:", e);
-        }
-      }
-    } else if (Array.isArray(raw) || typeof raw === "object") {
-      parsed = raw;
-    }
-
-    const addAdjustments = (vals = []) => {
-      vals.forEach((val) => {
-        const mod =
-          val?.price_adjustment ??
-          val?.priceModifier ??
-          val?.price_modifier;
-        if (mod !== undefined && mod !== null) {
-          const adj = parseFloat(mod);
-          if (!isNaN(adj)) {
-            optionsPrice += adj;
-          }
-        }
-      });
+  const translatePaymentType = (type) => {
+    const translations = {
+      cash: "Nakit",
+      credit_card: "Kredi Kartı",
     };
-
-    if (Array.isArray(parsed)) {
-      parsed.forEach((opt) => {
-        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
-      });
-    } else if (parsed && typeof parsed === "object") {
-      Object.values(parsed).forEach((opt) => {
-        if (opt && Array.isArray(opt.values)) addAdjustments(opt.values);
-      });
-    }
-
-    if (optionsPrice === 0 && typeof raw === "string") {
-      const regex = /\"price(?:_)?(?:adjustment|modifier)\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)/gi;
-      let match;
-      while ((match = regex.exec(raw)) !== null) {
-        const adj = parseFloat(match[1]);
-        if (!isNaN(adj)) optionsPrice += adj;
-      }
-    }
-
-    return optionsPrice;
+    return translations[type] || type;
   };
 
-  const computeOrderTotal = (order) => {
-    if (!order) return "0.00";
-    const items = order.order_items || order.orderItems || order.items || [];
-    if (!Array.isArray(items) || items.length === 0) {
-      return parseFloat(order.total_amount || 0).toFixed(2);
-    }
-
-    const total = items.reduce((sum, item) => {
-      const unitPrice = item.unit_price ?? item.unitPrice;
-      const baseRaw = unitPrice ?? item.base_price ?? item.price ?? 0;
-      const base = parseFloat(baseRaw);
-      const safeBase = isNaN(base) ? 0 : base;
-      const qty = item.quantity || 1;
-      const optionAdj = unitPrice === undefined ? getOptionsAdjustment(item.options) : 0;
-      return sum + (safeBase + optionAdj) * qty;
-    }, 0);
-
-    if (Number.isFinite(total)) {
-      return total.toFixed(2);
-    }
-    return parseFloat(order.total_amount || 0).toFixed(2);
+  const translateOrderStatus = (status) => {
+    const translations = {
+      pending: "Beklemede",
+      preparing: "Hazırlanıyor",
+      on_the_way: "Yolda",
+      delivered: "Teslim Edildi",
+      cancelled: "İptal Edildi",
+    };
+    return translations[status] || status;
   };
 
   if (!admin) return null;
@@ -323,22 +253,18 @@ const AdminOrders = () => {
         <div className="sidebar-header">
           <h2 className="sidebar-title">Admin</h2>
           <button className="close-sidebar" onClick={toggleSidebar}>
-            ✕
+            ×
           </button>
         </div>
         <Sidebar isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
       </aside>
 
-      <main
-        className={`main-content ${
-          isSidebarOpen ? "sidebar-open" : "sidebar-closed"
-        }`}
-      >
+      <main className={`main-content ${isSidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
         <section className="orders-section">
           <div className="filters">
             <input
               type="text"
-              placeholder="Sipariş ID veya Kullanıcı ID ara..."
+              placeholder="Sipariş ID, müşteri adı veya kullanıcı ID ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-bar"
@@ -350,7 +276,8 @@ const AdminOrders = () => {
             >
               <option value="all">Tüm Durumlar</option>
               <option value="pending">Beklemede</option>
-              <option value="processing">Hazırlanıyor</option>
+              <option value="preparing">Hazırlanıyor</option>
+              <option value="on_the_way">Yolda</option>
               <option value="delivered">Teslim Edildi</option>
               <option value="cancelled">İptal Edildi</option>
             </select>
@@ -368,69 +295,63 @@ const AdminOrders = () => {
                   <thead>
                     <tr>
                       <th>Sipariş ID</th>
-                      <th>Kullanıcı ID</th>
-                      <th>Toplam Tutar</th>
+                      <th>Müşteri</th>
+                      <th>Ödeme Tipi</th>
+                      <th>Toplam</th>
                       <th>Durum</th>
                       <th>Tarih</th>
                       <th>İşlemler</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {currentOrders.map((order) => {
-                      const orderTotal = computeOrderTotal(order);
-                      return (
-                        <tr key={order.id}>
-                          <td>{order.id}</td>
-                          <td>{order.user_id || "Misafir"}</td>
-                          <td>{orderTotal} TL</td>
-                          <td>
-                            <span
-                              className={`status-badge status-${order.order_status}`}
-                            >
-                              {order.order_status}
-                            </span>
-                          </td>
-                          <td>{new Date(order.order_time).toLocaleString()}</td>
-                          <td>
-                            <button
-                              className="action-btn edit-btn"
-                              onClick={() => handleEditClick(order)}
-                            >
-                              <FaEdit />
-                            </button>
-                            <button
-                              className="action-btn delete-btn"
-                              onClick={() => handleDelete(order.id)}
-                            >
-                              <FaTrash />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {currentOrders.map((order) => (
+                      <tr key={order.id}>
+                        <td>{order.id}</td>
+                        <td>
+                          {order.user_full_name ||
+                            (order.user_id ? `Kullanıcı #${order.user_id}` : "Misafir")}
+                        </td>
+                        <td>
+                          <span className={`payment-badge payment-${order.payment_type}`}>
+                            {translatePaymentType(order.payment_type)}
+                          </span>
+                        </td>
+                        <td>{computeOrderTotal(order)} TL</td>
+                        <td>
+                          <span className={`status-badge status-${order.order_status}`}>
+                            {translateOrderStatus(order.order_status)}
+                          </span>
+                        </td>
+                        <td>{order.order_time ? new Date(order.order_time).toLocaleString() : "-"}</td>
+                        <td>
+                          <button
+                            className="action-btn edit-btn"
+                            onClick={() => handleEditClick(order)}
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            className="action-btn delete-btn"
+                            onClick={() => handleDelete(order.id)}
+                          >
+                            <FaTrash />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-              <div
-                className="pagination"
-                style={{ marginTop: "20px", textAlign: "center" }}
-              >
-                <button
-                  onClick={handlePrevPage}
-                  disabled={currentPage === 1}
-                  className="action-btn"
-                  style={{ margin: "0 10px" }}
-                >
+
+              <div className="pagination" style={{ marginTop: "20px", textAlign: "center" }}>
+                <button onClick={handlePrevPage} disabled={currentPage === 1} className="action-btn">
                   Önceki
                 </button>
                 {Array.from({ length: totalPages }, (_, index) => (
                   <button
                     key={index + 1}
                     onClick={() => handlePageClick(index + 1)}
-                    className={`action-btn ${
-                      currentPage === index + 1 ? "edit-btn" : ""
-                    }`}
-                    style={{ margin: "0 5px" }}
+                    className={`action-btn ${currentPage === index + 1 ? "edit-btn" : ""}`}
                   >
                     {index + 1}
                   </button>
@@ -439,7 +360,6 @@ const AdminOrders = () => {
                   onClick={handleNextPage}
                   disabled={currentPage === totalPages}
                   className="action-btn"
-                  style={{ margin: "0 10px" }}
                 >
                   Sonraki
                 </button>
@@ -451,165 +371,38 @@ const AdminOrders = () => {
         {selectedOrder && (
           <div className={`edit-panel ${isEditPanelOpen ? "open" : "closed"}`}>
             <div className="edit-panel-header">
-              <h2>Sipariş Detay (güler uzun - {selectedOrder?.id})</h2>
-              <button
-                className="close-edit-panel"
-                onClick={handleCloseEditPanel}
-              >
-                ✕
+              <h2>Sipariş Detay #{selectedOrder.id}</h2>
+              <button className="close-edit-panel" onClick={handleCloseEditPanel}>
+                ×
               </button>
             </div>
-            <div className="edit-panel-content">
-              <div className="order-details">
-                <h3>Ürünler</h3>
-                <div className="order-item">
-                  <p>AutoCAD Eğitim Özel Ders 20 SAAT</p>
-                  <p>Stok Kodu: AUE003-20 SAAT</p>
-                  <p>Barkod: -</p>
-                  <p>1 Adet</p>
-                  <p>20 KDV</p>
-                  <p>25,920.00 TL</p>
-                </div>
-                <div className="order-totals">
-                  <p>Ara Toplam: 21,600.00 TL</p>
-                  <p>KDV Toplam: 4,320.00 TL</p>
-                  <p>Genel Toplam: 25,920.00 TL</p>
-                </div>
-              </div>
 
-              <div className="order-details">
-                <h3>Sipariş Detay</h3>
-                <p>
-                  <strong>Sipariş Kanalı:</strong> Site
-                </p>
-                <p>
-                  <strong>Üye Adı:</strong> güler uzun
-                </p>
-                <p>
-                  <strong>Sipariş Numarası:</strong> {selectedOrder?.id}
-                </p>
-                <p>
-                  <strong>Sipariş Tarihi:</strong>{" "}
-                  {new Date(selectedOrder?.order_time).toLocaleString()}
-                </p>
-                <p>
-                  <strong>Sipariş Notu:</strong> -
-                </p>
-                <p>
-                  <strong>Sipariş Durumu:</strong> {selectedOrder?.order_status}
-                </p>
-                <p>
-                  <strong>Ödeme Bekliyor:</strong> -
-                </p>
-              </div>
+            <AdminOrderDetails order={selectedOrder} />
 
-              <div className="order-details">
-                <h3>Teslimat Bilgileri</h3>
-                <p>
-                  <strong>Adres Adı:</strong> iş
-                </p>
-                <p>
-                  <strong>Adı Soyadı / TC:</strong> GÜLER UZUN / 401290790702
-                </p>
-                <p>
-                  <strong>E-Mail / Telefon:</strong> g.uzun83@hotmail.com /
-                  +905593833928
-                </p>
-                <p>
-                  <strong>Adres:</strong> ORÇUN REÇİS MAH.GÜVENÇ SOK NO:61
-                  ENSENLER-İST.
-                </p>
-                <p>
-                  <strong>Ülke / Şehir / İlçe:</strong> TÜRKIYE / İSTANBUL /
-                  ESENLER
-                </p>
-                <p>
-                  <strong>Posta Kodu:</strong> 34235
-                </p>
-              </div>
-
-              <div className="order-details">
-                <h3>Fatura Bilgileri</h3>
-                <p>
-                  <strong>Adı Soyadı:</strong> GÜLER UZUN
-                </p>
-                <p>
-                  <strong>E-Mail / Telefon:</strong> g.uzun83@hotmail.com /
-                  +905593833928
-                </p>
-                <p>
-                  <strong>Adres:</strong> ORÇUN REÇİS MAH.GÜVENÇ SOK NO:61
-                  ENSENLER-İST.
-                </p>
-                <p>
-                  <strong>Ülke / Şehir / İlçe:</strong> TÜRKIYE / İSTANBUL /
-                  ESENLER
-                </p>
-                <p>
-                  <strong>Fatura Türü:</strong> Bireysel
-                </p>
-                <p>
-                  <strong>TC No:</strong> -
-                </p>
-              </div>
-
-              <div className="order-details">
-                <h3>Kargo Bilgileri</h3>
-                <p>
-                  <strong>Sipariş Tutarı:</strong>{" "}
-                  {computeOrderTotal(selectedOrder)} TL
-                </p>
-                <p>
-                  <strong>Sipariş Türü:</strong> EFT / Havale
-                </p>
-                <p>
-                  <strong>Banka Adı:</strong> HALKBANK
-                </p>
-                <p>
-                  <strong>Banka IBAN:</strong> TR22 0001 2001 2001 6510 0100
-                  1004
-                </p>
-              </div>
-            </div>
             <div className="edit-panel-action-bar">
-              <button
-                className="action-bar-btn print-btn"
-                onClick={handlePrint}
-              >
+              <button className="action-bar-btn print-btn" onClick={handlePrint}>
                 <FaPrint /> Yazdır
               </button>
-              <button
-                className="action-bar-btn transfer-btn"
-                onClick={handleTransferOrders}
-              >
-                <FaShareAlt /> Siparişleri Aktar
-              </button>
-              <button
-                className="action-bar-btn update-status-btn"
-                onClick={handleUpdateStatus}
-              >
+              <button className="action-bar-btn update-status-btn" onClick={handleOpenStatusModal}>
                 <FaSyncAlt /> Durumu Güncelle
               </button>
               <button
-                className="action-bar-btn send-mail-btn"
-                onClick={handleSendMail}
-              >
-                <FaEnvelope /> Mail Gönder
-              </button>
-              <button
-                className="action-bar-btn return-btn"
-                onClick={handleReturnOperations}
-              >
-                <FaUndo /> İade İşlemleri
-              </button>
-              <button
                 className="action-bar-btn delete-btn"
-                onClick={() => handleDelete(selectedOrder?.id)}
+                onClick={() => handleDelete(selectedOrder.id)}
               >
-                <FaTrash /> Siparişi Sil
+                <FaTrash /> Sil
               </button>
             </div>
           </div>
+        )}
+
+        {isStatusModalOpen && selectedOrder && (
+          <StatusUpdateModal
+            orderId={selectedOrder.id}
+            currentStatus={selectedOrder.order_status}
+            onClose={handleCloseStatusModal}
+            onUpdate={handleStatusUpdate}
+          />
         )}
       </main>
     </div>
