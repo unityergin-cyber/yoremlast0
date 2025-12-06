@@ -101,7 +101,53 @@ const GeneralSettings = () => {
 
       <Sidebar isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
 
-      
+      <main className={`apw-main ${isSidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
+        <section className="apw-container">
+          <div className="apw-card">
+            {error && <div className="apw-alert apw-alert-error">{error}</div>}
+            {success && <div className="apw-alert apw-alert-success">{success}</div>}
+
+            {loading && !success && !error ? (
+              <div style={{ textAlign: "center", padding: "40px" }}>Yükleniyor...</div>
+            ) : (
+              <form onSubmit={handleSubmit} className="apw-form">
+                {/* Ürün Özellikleri Bölümü */}
+                <div className="apw-block">
+                  <div className="apw-block-head">
+                    <div>
+                      <h3 className="apw-block-title">Ürün Özellikleri</h3>
+                      <p className="apw-block-desc">Ürün yönetimi ile ilgili ayarlar</p>
+                    </div>
+                  </div>
+
+                  <div className="settings-item">
+                    <div className="settings-item-info">
+                      <h4 className="settings-item-title">Ürün Seçenekleri</h4>
+                      <p className="settings-item-desc">
+                        Ürünlere seçenek ekleme özelliğini aktif eder (Örn: Büyük Boy, Ekstra SoWWDEWDs)
+                      </p>
+                    </div>
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={settings.product_options_enabled}
+                        onChange={() => handleToggle("product_options_enabled")}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="apw-actions">
+                  <button type="submit" className="apw-btn apw-btn-primary" disabled={loading}>
+                    {loading ? "Kaydediliyor..." : "Ayarları Kaydet"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </section>
+      </main>
 
       <style jsx>{`
         .settings-item {

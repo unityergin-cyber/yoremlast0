@@ -748,7 +748,6 @@ const getCart = (req, res) => {
 
   console.log("getCart çağrıldı, req.user:", user);
 
-  // Kullanıcı bilgisi kontrolü
   if (!user) {
     return res.status(401).json({
       error: "Yetkisiz erişim",
@@ -762,7 +761,6 @@ const getCart = (req, res) => {
 
   console.log("Sepet sorgusu parametreleri:", { userId, guestId, userType });
 
-  // İlk olarak sadece cart kayıtlarını bulalım, products join'ini sonra yapalım
   const cartQuery = `
     SELECT id, user_id, guest_id, product_id, quantity, options, note
     FROM cart
@@ -772,9 +770,6 @@ const getCart = (req, res) => {
   `;
 
   const params = [user.isGuest ? guestId : userId, userType];
-
-  console.log("Cart SQL:", cartQuery);
-  console.log("Parametreler:", params);
 
   db.query(cartQuery, params, (err, cartItems) => {
     if (err) {
@@ -786,7 +781,6 @@ const getCart = (req, res) => {
 
     console.log("Bulunan sepet öğeleri:", cartItems.length);
 
-    // Sepet boşsa boş array döndür
     if (cartItems.length === 0) {
       return res.json({
         cart: [],
@@ -794,17 +788,14 @@ const getCart = (req, res) => {
       });
     }
 
-    // Ürün ID'lerini al
     const productIds = cartItems.map((item) => item.product_id);
 
-    // Ürün bilgilerini ayrı sorguda getir
     const productQuery = `
       SELECT 
         id, 
         name, 
         base_price, 
         image_url,
-        options as product_options,
         category_id
       FROM products
       WHERE id IN (?)
@@ -818,53 +809,99 @@ const getCart = (req, res) => {
           .json({ error: "Ürün bilgileri getirilemedi: " + err.message });
       }
 
-      // Sepet öğelerini ürün bilgileriyle birleştir
-    const enrichedCart = cartItems.map((cartItem) => {
-    const product = products.find((p) => p.id === cartItem.product_id) || {};
-    
-    // ✅ DÜZELTME: Options fiyatlarını hesapla
-    let optionsPrice = 0;
-    if (cartItem.options) {
-        try {
-            const parsedOptions = typeof cartItem.options === 'string' 
-                ? JSON.parse(cartItem.options) 
-                : cartItem.options;
+      const enrichedCart = cartItems.map((cartItem) => {
+        const product = products.find((p) => p.id === cartItem.product_id) || {};
+        
+        let optionsPrice = 0;
+        let parseError = false;
+        
+        if (cartItem.options) {
+          try {
+            // ✅ 1. RAW OPTIONS LOG
+            console.log('=== CART ITEM OPTIONS DEBUG ===');
+            console.log('Cart Item ID:', cartItem.id);
+            console.log('Raw options type:', typeof cartItem.options);
+            console.log('Raw options length:', cartItem.options.length);
+            console.log('Raw options (first 200 chars):', cartItem.options.substring(0, 200));
+            console.log('Raw options (last 50 chars):', cartItem.options.substring(cartItem.options.length - 50));
             
-            if (Array.isArray(parsedOptions)) {
-                parsedOptions.forEach(option => {
-                    if (option && option.values && Array.isArray(option.values)) {
-                        option.values.forEach(val => {
-                            if (val && val.price_adjustment) {
-                                optionsPrice += parseFloat(val.price_adjustment);
-                            }
-                        });
-                    }
-                });
+            // ✅ 2. PARSE ET
+            let parsedOptions = cartItem.options;
+            if (typeof cartItem.options === 'string') {
+              // JSON'ın tamamlanmış olup olmadığını kontrol et
+              const startsCorrect = cartItem.options.trim().startsWith('[');
+              const endsCorrect = cartItem.options.trim().endsWith(']');
+              
+              if (!startsCorrect || !endsCorrect) {
+                console.error('❌ JSON incomplete! Starts with [:', startsCorrect, 'Ends with ]:', endsCorrect);
+                parseError = true;
+                throw new Error('JSON string is incomplete');
+              }
+              
+              parsedOptions = JSON.parse(cartItem.options);
+              console.log('✅ Successfully parsed options');
             }
-        } catch (e) {
-            console.error('Options parse error:', e);
+            
+            // ✅ 3. FIYATLARI HESAPLA
+            if (Array.isArray(parsedOptions)) {
+              console.log('Options array length:', parsedOptions.length);
+              
+              parsedOptions.forEach((option, optIndex) => {
+                console.log(`\nProcessing option ${optIndex}:`, option.name);
+                
+                if (option && option.values && Array.isArray(option.values)) {
+                  console.log(`  - Values count:`, option.values.length);
+                  
+                  option.values.forEach((val, valIndex) => {
+                    console.log(`  - Value ${valIndex}:`, val.value, 'price_adjustment:', val.price_adjustment);
+                    
+                    if (val && val.price_adjustment !== undefined && val.price_adjustment !== null) {
+                      const priceAdj = parseFloat(val.price_adjustment);
+                      if (!isNaN(priceAdj)) {
+                        optionsPrice += priceAdj;
+                        console.log(`    ✅ Added ${priceAdj} TL (total: ${optionsPrice} TL)`);
+                      }
+                    }
+                  });
+                }
+              });
+            }
+            
+            console.log(`\n🎯 FINAL options price for cart item ${cartItem.id}: ${optionsPrice} TL`);
+            console.log('=================================\n');
+            
+          } catch (e) {
+            console.error('❌ OPTIONS PARSE ERROR for cart item:', cartItem.id);
+            console.error('Error message:', e.message);
+            console.error('Error stack:', e.stack);
+            console.error('Raw options that failed:', cartItem.options);
+            parseError = true;
+          }
         }
-    }
-    
-    // ✅ DÜZELTME: base_price'a options fiyatını ekle
-    const finalPrice = parseFloat(product.base_price || 0) + optionsPrice;
-    
-    return {
-        id: cartItem.id,
-        name: product.name || "Ürün bulunamadı",
-        base_price: finalPrice, // ✅ Options fiyatı dahil!
-        quantity: cartItem.quantity,
-        options: cartItem.options,
-        image_url: product.image_url,
-        product_id: cartItem.product_id,
-        options_price: optionsPrice, // ✅ DEBUG için
-    };
-});
+        
+        const baseFiyat = parseFloat(product.base_price || 0);
+        const toplamBirimFiyat = baseFiyat + optionsPrice;
+        
+        return {
+          id: cartItem.id,
+          name: product.name || "Ürün bulunamadı",
+          base_price: toplamBirimFiyat,
+          unit_price: toplamBirimFiyat,
+          price: toplamBirimFiyat,
+          quantity: cartItem.quantity,
+          options: cartItem.options,
+          image_url: product.image_url,
+          product_id: cartItem.product_id,
+          options_price: optionsPrice,
+          base_price_without_options: baseFiyat,
+          parse_error: parseError, // ✅ Hata varsa flagle
+        };
+      });
 
-const total = enrichedCart.reduce(
-    (sum, item) => sum + item.base_price * item.quantity, // ✅ base_price artık complete
-    0
-);
+      const total = enrichedCart.reduce(
+        (sum, item) => sum + item.base_price * item.quantity,
+        0
+      );
 
       res.json({
         cart: enrichedCart,
@@ -901,7 +938,45 @@ const removeFromCart = (req, res) => {
     }
   );
 };
+const testCartOptions = (req, res) => {
+  const testOptions = "[{\"option_id\":1,\"name\":\"Boyut\",\"type\":\"single\",\"values\":[{\"value_id\":6,\"value\":\"Büyük\",\"price_adjustment\":10}]},{\"option_id\":3,\"name\":\"Ekstralar\",\"type\":\"multiple\",\"values\":[{\"value_id\":10,\"value\":\"Cheese\",\"price_adjustment\":3},{\"value_id\":11,\"value\":\"Bacon\",\"price_adjustment\":5}]}]";
+  
+  let optionsPrice = 0;
+  
+  try {
+    const parsed = JSON.parse(testOptions);
+    console.log('Parsed:', JSON.stringify(parsed, null, 2));
+    
+    if (Array.isArray(parsed)) {
+      parsed.forEach(option => {
+        console.log('Processing option:', option.name);
+        if (option && option.values && Array.isArray(option.values)) {
+          option.values.forEach(val => {
+            console.log('Processing value:', val.value, 'price:', val.price_adjustment);
+            if (val && val.price_adjustment !== undefined) {
+              const priceAdj = parseFloat(val.price_adjustment);
+              if (!isNaN(priceAdj)) {
+                optionsPrice += priceAdj;
+                console.log(`Added ${priceAdj}, total now: ${optionsPrice}`);
+              }
+            }
+          });
+        }
+      });
+    }
+  } catch (e) {
+    console.error('Error:', e);
+  }
+  
+  res.json({
+    raw: testOptions,
+    parsed: JSON.parse(testOptions),
+    calculated_price: optionsPrice
+  });
+};
 
+// Sonra routes'a ekle
+// router.get('/test-options', testCartOptions);
 const getAllProductsAdmin = (req, res) => {
   const { category_id } = req.query;
 

@@ -144,76 +144,73 @@ function UserAddToCardScreen({ navigation }) {
     }, [siparisDetaylari]);
 
     const sepetVerileriniGetir = async () => {
-        try {
-            setYukleniyor(true);
-            
-            const token = await AsyncStorage.getItem('userToken');
-            if (!token) {
-                setYukleniyor(false);
-                return;
+    try {
+        setYukleniyor(true);
+        
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) {
+            setYukleniyor(false);
+            return;
+        }
+    
+        console.log("Sepet API URL'si:", `${API_URL}/api/products/cart`);
+        
+        const response = await fetch(`${API_URL}/api/products/cart`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
             }
+        });
+    
+        console.log('Sepet API Yanıt Durumu:', response.status);
         
-            // URL'yi kontrol edin - API yolunuzu gösterin
-            console.log("Sepet API URL'si:", `${API_URL}/api/products/cart`);
-            
-            const response = await fetch(`${API_URL}/api/products/cart`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+        const responseText = await response.text();
+        console.log('Sepet API Yanıt Gövdesi:', responseText);
         
-            console.log('Sepet API Yanıt Durumu:', response.status);
-            
-            // İstek gövdesini loglayalım
-            const responseText = await response.text();
-            console.log('Sepet API Yanıt Gövdesi:', responseText);
-            
-            // Yanıt boş değilse işleyelim
-            if (responseText.trim()) {
-                try {
-                    const responseData = JSON.parse(responseText);
-                    console.log("Çözümlenmiş sepet verisi:", responseData);
-                    
-                                          if (responseData.cart && Array.isArray(responseData.cart)) {
-                        const formatlanmisSepet = responseData.cart.map(item => {
-                            const { parsed, rawString, price: optionsPrice } = parseOptionsAndPrice(item.options);
-                            const seceneklerText = buildOptionText(parsed, rawString);
-                            const baseFiyat = parseFloat(item.base_price || item.unit_price || item.price || 0);
-                            const serverOptionsPrice = item.options_price !== undefined ? parseFloat(item.options_price) || 0 : null;
-                            // Sunucunun döndürdüğü base_price genellikle seçenek dahil; varsa onu kullan, yoksa manuel ekle
-                            const toplamFiyat = serverOptionsPrice !== null ? baseFiyat : baseFiyat + optionsPrice;
-                            
-                            return {
-                                id: item.id,
-                                ad: item.name || "Isimsiz urun",
-                                resim: item.image_url,
-                                fiyat: parseFloat(item.base_price || item.unit_price || item.price || 0) + optionsPrice,
-                                adet: item.quantity || 1,
-                                boyut: seceneklerText,
-                                productId: item.product_id
-                            };
-                        });
+        if (responseText.trim()) {
+            try {
+                const responseData = JSON.parse(responseText);
+                console.log("Çözümlenmiş sepet verisi:", responseData);
+                
+                if (responseData.cart && Array.isArray(responseData.cart)) {
+                    // ✅ DÜZELTME: Backend artık base_price'a seçenek fiyatını dahil ediyor
+                    const formatlanmisSepet = responseData.cart.map(item => {
+                        const { parsed, rawString } = parseOptionsAndPrice(item.options);
+                        const seceneklerText = buildOptionText(parsed, rawString);
                         
-                        setSepet(formatlanmisSepet);
-                    } else {
-                        setSepet([]);
-                    }
-                } catch (jsonError) {
-                    console.error('JSON çözümleme hatası:', jsonError);
+                        // ✅ Backend'den gelen base_price zaten seçenek dahil
+                        const birimFiyat = parseFloat(item.base_price || item.unit_price || item.price || 0);
+                        
+                        return {
+                            id: item.id,
+                            ad: item.name || "Isimsiz urun",
+                            resim: item.image_url,
+                            fiyat: birimFiyat, // ✅ Artık seçenek dahil
+                            adet: item.quantity || 1,
+                            boyut: seceneklerText,
+                            productId: item.product_id
+                        };
+                    });
+                    
+                    setSepet(formatlanmisSepet);
+                } else {
                     setSepet([]);
                 }
-            } else {
+            } catch (jsonError) {
+                console.error('JSON çözümleme hatası:', jsonError);
                 setSepet([]);
             }
-        } catch (error) {
-            console.error('Sepet verileri yüklenirken hata oluştu:', error);
+        } else {
             setSepet([]);
-        } finally {
-            setYukleniyor(false);
         }
-    };
+    } catch (error) {
+        console.error('Sepet verileri yüklenirken hata oluştu:', error);
+        setSepet([]);
+    } finally {
+        setYukleniyor(false);
+    }
+};
 
     const updateCartItemQuantity = async (id, newQuantity) => {
         try {

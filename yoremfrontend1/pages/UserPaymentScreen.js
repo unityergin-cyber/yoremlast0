@@ -57,7 +57,7 @@ function UserPaymentScreen(props) {
     const [adresler, setAdresler] = useState([]);
     const [seciliAdresId, setSeciliAdresId] = useState(null);
     const [hata, setHata] = useState(null);
-    const [toplamFiyat, setToplamFiyat] = useState("0.00");
+    const [toplamFiyat, setToplamFiyat] = useState();
 
     // useFocusEffect kullanarak ekran her odaklandığında adresleri yeniden yükle
     useFocusEffect(
@@ -65,7 +65,7 @@ function UserPaymentScreen(props) {
             console.log("Ekran odaklandı, adres bilgileri yenileniyor... isLoggedIn:", isLoggedIn);
             
             // Login durumunu yeniden kontrol et
-            if (!isLoggedIn || !userToken) {
+            if (!isLoggedIn) {
                 return; // Login yoksa işlemi iptal et
             }
             
@@ -77,7 +77,7 @@ function UserPaymentScreen(props) {
                 // Temizleme işlemleri gerekirse burada yapabilirsiniz
                 console.log("Ekran odaktan çıktı");
             };
-        }, [isLoggedIn, userToken])
+        }, [isLoggedIn])
     );
 
     // Ürün seçeneklerini parse edip fiyat ayarlamalarını topla
@@ -85,8 +85,7 @@ function UserPaymentScreen(props) {
         const result = {
             parsed: null,
             rawString: "",
-            price: 0,
-            hasPrice: false
+            price: 0
         };
 
         if (!options) return result;
@@ -96,20 +95,16 @@ function UserPaymentScreen(props) {
             result.rawString = raw;
         }
 
-        const tryParse = (value) => {
-            try {
-                return JSON.parse(value);
-            } catch {
-                return null;
-            }
-        };
-
         if (typeof raw === "string" && raw) {
             const looksComplete =
                 (raw.startsWith("[") && raw.endsWith("]")) ||
                 (raw.startsWith("{") && raw.endsWith("}"));
             if (looksComplete) {
-                result.parsed = tryParse(raw) || tryParse(raw.replace(/'/g, '"'));
+                try {
+                    result.parsed = JSON.parse(raw);
+                } catch (e) {
+                    console.warn("Options parse failed:", e);
+                }
             }
         } else if (Array.isArray(raw) || typeof raw === "object") {
             result.parsed = raw;
@@ -120,10 +115,7 @@ function UserPaymentScreen(props) {
                 const mod = val?.price_adjustment ?? val?.priceModifier ?? val?.price_modifier;
                 if (mod !== undefined && mod !== null) {
                     const adj = parseFloat(mod);
-                    if (!isNaN(adj)) {
-                        result.price += adj;
-                        result.hasPrice = true;
-                    }
+                    if (!isNaN(adj)) result.price += adj;
                 }
             });
         };
@@ -138,8 +130,8 @@ function UserPaymentScreen(props) {
             });
         }
 
-        if (!result.hasPrice && typeof raw === "string") {
-            const regex = /["']price(?:_)?(?:adjustment|modifier)["']\s*:\s*(-?\d+(?:\.\d+)?)/gi;
+        if (result.price === 0 && typeof raw === "string") {
+            const regex = /"price(?:_)?(?:adjustment|modifier)"\s*:\s*(-?\d+(?:\.\d+)?)/gi;
             let match;
             while ((match = regex.exec(raw)) !== null) {
                 const adj = parseFloat(match[1]);
@@ -203,59 +195,58 @@ function UserPaymentScreen(props) {
     };
     
     // Toplam sipariş tutarı hesapla
-    const hesaplaToplam = async () => {
-        try {
-            if (!isLoggedIn || !userToken) {
-                console.log("Toplam hesaplama: Oturum açık değil");
-                return "0.00";
-            }
-
-            console.log("Sepet toplam hesaplaması... Token:", userToken ? "VAR" : "YOK");
-            
-            // Sepet ürünlerini API'den çek
-            const response = await fetch(`${API_URL}/api/products/cart`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${userToken}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                console.error("Sepet getirme hatası:", response.status);
-                return "0.00";
-            }
-            
-            const responseData = await response.json();
-            
-            // Sepet boşsa
-            if (!responseData.cart || responseData.cart.length === 0) {
-                console.log("Sepet boş");
-                return "0.00";
-            }
-            
-            // Toplam tutarı hesapla (seçenek fiyatları dahil)
-            const toplam = responseData.cart.reduce((toplam, urun) => {
-                const adet = urun.quantity || 1;
-                const baseFiyat = parseFloat(urun.base_price || urun.unit_price || urun.price || 0);
-                const { price: optionsPrice } = parseOptionsAndPrice(urun.options);
-                const birimFiyat = baseFiyat + optionsPrice;
-                const itemTotal = birimFiyat * adet;
-                
-                console.log(`Ürün: ${urun.name}, Birim Fiyat: ${baseFiyat}, Seçenek Fiyatı: ${optionsPrice}, Adet: ${adet}, Ara Toplam: ${itemTotal}`);
-                
-                return toplam + itemTotal;
-            }, 0);
-            
-            const sonuc = toplam.toFixed(2);
-            console.log(`Hesaplanan toplam: ${sonuc}`);
-            
-            return sonuc;
-        } catch (error) {
-            console.error("Toplam hesaplama hatası:", error);
+  // Toplam sipariş tutarı hesapla
+const hesaplaToplam = async () => {
+    try {
+        if (!isLoggedIn || !userToken) {
+            console.log("Toplam hesaplama: Oturum açık değil");
             return "0.00";
         }
-    };
+
+        console.log("Sepet toplam hesaplaması... Token:", userToken ? "VAR" : "YOK");
+        
+        // Sepet ürünlerini API'den çek
+        const response = await fetch(`${API_URL}/api/products/cart`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${userToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            console.error("Sepet getirme hatası:", response.status);
+            return "0.00";
+        }
+        
+        const responseData = await response.json();
+        
+        // Sepet boşsa
+        if (!responseData.cart || responseData.cart.length === 0) {
+            console.log("Sepet boş");
+            return "0.00";
+        }
+        
+        // ✅ DÜZELTME: Backend'den gelen base_price zaten seçenek dahil
+        const toplam = responseData.cart.reduce((toplam, urun) => {
+            const birimFiyat = parseFloat(urun.base_price || urun.unit_price || urun.price || 0);
+            const adet = urun.quantity || 1;
+            const itemTotal = birimFiyat * adet;
+            
+            console.log(`Ürün: ${urun.name}, Birim Fiyat (Seçenek Dahil): ${birimFiyat}, Adet: ${adet}, Ara Toplam: ${itemTotal}`);
+            
+            return toplam + itemTotal;
+        }, 0);
+        
+        const sonuc = toplam.toFixed(2);
+        console.log(`Hesaplanan toplam: ${sonuc}`);
+        
+        return sonuc;
+    } catch (error) {
+        console.error("Toplam hesaplama hatası:", error);
+        return "0.00";
+    }
+};
 
     // Toplamı hesaplayan fonksiyon
     const toplamHesapla = async () => {
@@ -497,8 +488,7 @@ const handleSiparisTamamlaButton = async () => {
     const orderRequest = {
       address_id: seciliAdresId,
       payment_type: odemeYontemi,
-      note: fullNote,
-      total_amount: sepetToplami
+      note: fullNote
     };
     
     console.log("İstek body:", JSON.stringify(orderRequest));
@@ -541,45 +531,31 @@ const handleSiparisTamamlaButton = async () => {
         // Detaylı hata logları
         console.log("=== HATA DETAYLARI ===");
         console.log("Response Data:", responseData);
+        console.log("Error:", responseData.error);
+        console.log("Message:", responseData.message);
+        console.log("Full Error Message:", responseData.fullErrorMessage);
+        console.log("Error Stack:", responseData.errorStack);
+        console.log("Status:", responseData.status);
         console.log("=====================");
         
-        // Hata mesajını belirle (responseData.details öncelikli)
-        const hataMesaji = responseData.details 
-          || responseData.error 
+        // Hata mesajını belirle
+        let hataMesaji = responseData.error 
           || responseData.message 
-          || 'Sipariş oluşturulurken bir hata oluştu.';
+          || responseData.fullErrorMessage
+          || 'Sipariş oluşturulurken bir hata oluştu';
         
+        // Backend'den gelen hata mesajını logla
         console.log("Kullanıcıya gösterilecek hata:", hataMesaji);
-
-        // Sipariş tamamlanamadığı için sonuç ekranına yönlendir
+        
         props.navigation.navigate('SiparisTamamla', {
-            islemDurumu: 'basarisiz'
+          islemDurumu: 'basarisiz'
         });
         
-        // Minimum sipariş tutarı hatasını özel olarak ele al
-        if (hataMesaji.toLowerCase().includes('minimum sipariş tutarı')) {
-          Alert.alert(
-            'Minimum Sipariş Tutarı',
-            hataMesaji,
-            [
-              {
-                text: 'Alışverişe Devam Et',
-                onPress: () => props.navigation.navigate('Main')
-              },
-              {
-                text: 'Tamam',
-                style: 'cancel'
-              }
-            ]
-          );
-        } else {
-          // Diğer hatalar için genel bir mesaj göster
-          Alert.alert(
-            'Sipariş Hatası',
-            hataMesaji,
-            [{ text: 'Tamam' }]
-          );
-        }
+        Alert.alert(
+          'Sipariş Hatası',
+          hataMesaji,
+          [{ text: 'Tamam' }]
+        );
       }
     } catch (parseError) {
       console.error("JSON parse hatası:", parseError.message);

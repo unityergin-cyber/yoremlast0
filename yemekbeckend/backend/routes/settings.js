@@ -14,7 +14,7 @@ router.get("/general", authenticateAdmin, (req, res) => {
   const query = `
     SELECT setting_key, setting_value 
     FROM settings 
-    WHERE setting_key IN ('product_options_enabled', 'address_description_enabled')
+    WHERE setting_key IN ('product_options_enabled', 'address_description_enabled', 'working_hours_check_enabled')
   `;
 
   db.query(query, (err, results) => {
@@ -36,7 +36,8 @@ router.get("/general", authenticateAdmin, (req, res) => {
     // Varsayılan değerler ekle (eğer veritabanında yoksa)
     const defaultSettings = {
       product_options_enabled: false,
-      address_description_enabled: false
+      address_description_enabled: false,
+      working_hours_check_enabled: true
     };
 
     res.json({
@@ -50,7 +51,7 @@ router.get("/general", authenticateAdmin, (req, res) => {
 router.put("/general", authenticateAdmin, (req, res) => {
   // ✅ authenticateAdmin middleware zaten kontrol ediyor
   
-  const { product_options_enabled, address_description_enabled } = req.body;
+  const { product_options_enabled, address_description_enabled, working_hours_check_enabled } = req.body;
 
   // Güncellenecek ayarlar
   const settingsToUpdate = [];
@@ -66,6 +67,13 @@ router.put("/general", authenticateAdmin, (req, res) => {
     settingsToUpdate.push({
       key: 'address_description_enabled',
       value: address_description_enabled ? "1" : "0"
+    });
+  }
+
+  if (working_hours_check_enabled !== undefined) {
+    settingsToUpdate.push({
+      key: 'working_hours_check_enabled',
+      value: working_hours_check_enabled ? "1" : "0"
     });
   }
 

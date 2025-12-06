@@ -6,7 +6,7 @@ exports.getGeneralSettings = (req, res) => {
     const query = `
       SELECT setting_key, setting_value 
       FROM settings 
-      WHERE setting_key IN ('product_options_enabled', 'address_description_enabled')
+      WHERE setting_key IN ('product_options_enabled', 'address_description_enabled', 'working_hours_check_enabled')
     `;
     
     db.query(query, (err, results) => {
@@ -27,7 +27,8 @@ exports.getGeneralSettings = (req, res) => {
       // Varsayılan değerler
       const defaultSettings = {
         product_options_enabled: false,
-        address_description_enabled: false
+        address_description_enabled: false,
+        working_hours_check_enabled: true
       };
 
       res.status(200).json({
@@ -47,7 +48,7 @@ exports.getGeneralSettings = (req, res) => {
 // Genel ayarları güncelle (Admin için)
 exports.updateGeneralSettings = (req, res) => {
   try {
-    const { address_description_enabled, product_options_enabled } = req.body;
+    const { address_description_enabled, product_options_enabled, working_hours_check_enabled } = req.body;
 
     const settingsToUpdate = [];
     
@@ -62,6 +63,13 @@ exports.updateGeneralSettings = (req, res) => {
       settingsToUpdate.push({
         key: "product_options_enabled",
         value: product_options_enabled ? "1" : "0"
+      });
+    }
+
+    if (working_hours_check_enabled !== undefined) {
+      settingsToUpdate.push({
+        key: 'working_hours_check_enabled',
+        value: working_hours_check_enabled ? "1" : "0"
       });
     }
 

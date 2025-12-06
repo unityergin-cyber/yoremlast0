@@ -149,63 +149,70 @@ const createOrder = async (req, res) => {
   console.log("Mahalle minimum sipariş tutarı:", minOrderAmount);
 
   // 2. Sepet ürünlerini getir
-  const cartQuery =
-    userType === "guest"
-      ? "SELECT c.*, p.base_price, p.options AS product_options FROM cart c JOIN products p ON c.product_id = p.id WHERE c.guest_id = ? AND c.user_type = ?"
-      : "SELECT c.*, p.base_price, p.options AS product_options FROM cart c JOIN products p ON c.product_id = p.id WHERE c.user_id = ? AND c.user_type = ?";
+ // 2. Sepet ürünlerini getir
+const cartQuery =
+  userType === "guest"
+    ? "SELECT c.*, p.base_price, p.options AS product_options FROM cart c JOIN products p ON c.product_id = p.id WHERE c.guest_id = ? AND c.user_type = ?"
+    : "SELECT c.*, p.base_price, p.options AS product_options FROM cart c JOIN products p ON c.product_id = p.id WHERE c.user_id = ? AND c.user_type = ?";
 
-  const cartItems = await query(connection, cartQuery, [
-    userType === "guest" ? guestId : userId,
-    userType,
-  ]);
+const cartItems = await query(connection, cartQuery, [
+  userType === "guest" ? guestId : userId,
+  userType,
+]);
 
-  if (cartItems.length === 0) {
-    const error = new Error("Sepetiniz boş, sipariş oluşturamazsınız.");
-    error.statusCode = 400;
-    throw error;
+if (cartItems.length === 0) {
+  const error = new Error("Sepetiniz boş, sipariş oluşturamazsınız.");
+  error.statusCode = 400;
+  throw error;
+}
+
+console.log(`Sepette ${cartItems.length} ürün bulundu.`);
+
+// 3. Toplam tutarı hesapla
+let totalAmount = 0;
+const orderItemsData = cartItems.map((item) => {
+  let unitPrice = parseFloat(item.base_price);
+
+  // ✅ Seçenek fiyatlarını hesapla
+  let optionsPrice = 0;
+  if (item.options) {
+    try {
+      const parsedOptions = typeof item.options === 'string' 
+        ? JSON.parse(item.options) 
+        : item.options;
+      
+      if (Array.isArray(parsedOptions)) {
+        parsedOptions.forEach(option => {
+          if (option && option.values && Array.isArray(option.values)) {
+            option.values.forEach(val => {
+              if (val && val.price_adjustment) {
+                optionsPrice += parseFloat(val.price_adjustment);
+              }
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Seçenek fiyatı hesaplama hatası:', e);
+    }
   }
 
-  console.log(`Sepette ${cartItems.length} ürün bulundu.`);
+  // ✅ Toplam birim fiyat = base_price + seçenek fiyatları
+  const toplamBirimFiyat = unitPrice + optionsPrice;
+  const itemPrice = toplamBirimFiyat * item.quantity;
+  totalAmount += itemPrice;
 
-  // 3. Toplam tutarı hesapla
-  let totalAmount = 0;
-  const orderItemsData = cartItems.map((item) => {
-    let unitPrice = parseFloat(item.base_price);
+  return [
+    null,
+    item.product_id,
+    item.quantity,
+    toplamBirimFiyat, // ✅ Seçenek dahil fiyat
+    item.options,
+    item.note,
+  ];
+});
 
-    // Ürün seçeneği varsa fiyatı güncelle
-    if (item.options) {
-      try {
-        const productOptions = item.product_options
-          ? typeof item.product_options === "string"
-            ? JSON.parse(item.product_options)
-            : item.product_options
-          : [];
-
-        const selectedOption = productOptions.find(
-          (opt) => opt.name === item.options
-        );
-        if (selectedOption && selectedOption.priceModifier) {
-          unitPrice += parseFloat(selectedOption.priceModifier);
-        }
-      } catch (e) {
-        console.error("Ürün seçenekleri çözümleme hatası:", e);
-      }
-    }
-
-    const itemPrice = unitPrice * item.quantity;
-    totalAmount += itemPrice;
-
-    return [
-      null,
-      item.product_id,
-      item.quantity,
-      unitPrice,
-      item.options,
-      item.note,
-    ];
-  });
-
-  console.log("Toplam sipariş tutarı:", totalAmount);
+console.log("Toplam sipariş tutarı:", totalAmount);
 
   // ✅ ÖNEMLI: Minimum sipariş tutarı kontrolü (kupon uygulanmadan ÖNCE)
   if (minOrderAmount > 0 && totalAmount < minOrderAmount) {
