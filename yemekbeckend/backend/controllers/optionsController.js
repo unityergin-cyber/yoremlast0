@@ -6,7 +6,7 @@ const moment = require("moment");
 // Tüm seçenekleri getir (değerleriyle birlikte)
 const getAllOptions = (req, res) => {
   const optionsQuery = `
-    SELECT id, name, description, type, is_active, created_at, updated_at
+    SELECT id, name, type, is_active, created_at, updated_at
     FROM options 
     WHERE is_active = TRUE
     ORDER BY created_at DESC
@@ -51,7 +51,7 @@ const getAllOptions = (req, res) => {
 
 // Seçenek oluştur
 const createOption = (req, res) => {
-  const { name, description, type } = req.body;
+  const { name, type } = req.body;
 
   if (!name || !type) {
     return res.status(400).json({ error: "Seçenek adı ve türü zorunludur" });
@@ -62,13 +62,13 @@ const createOption = (req, res) => {
   }
 
   const query = `
-    INSERT INTO options (name, description, type, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, TRUE, ?, ?)
+    INSERT INTO options (name, type, is_active, created_at, updated_at)
+    VALUES (?, ?, TRUE, ?, ?)
   `;
 
   db.query(
     query,
-    [name, description || null, type, moment().toDate(), moment().toDate()],
+    [name, type, moment().toDate(), moment().toDate()],
     (err, result) => {
       if (err) {
         console.error("Seçenek ekleme hatası:", err);
@@ -87,7 +87,7 @@ const createOption = (req, res) => {
 // Seçeneği güncelle
 const updateOption = (req, res) => {
   const { id } = req.params;
-  const { name, description, type } = req.body;
+  const { name, type } = req.body;
 
   if (!name || !type) {
     return res.status(400).json({ error: "Seçenek adı ve türü zorunludur" });
@@ -99,13 +99,13 @@ const updateOption = (req, res) => {
 
   const query = `
     UPDATE options
-    SET name = ?, description = ?, type = ?, updated_at = ?
+    SET name = ?, type = ?, updated_at = ?
     WHERE id = ?
   `;
 
   db.query(
     query,
-    [name, description || null, type, moment().toDate(), id],
+    [name, type, moment().toDate(), id],
     (err, result) => {
       if (err) {
         console.error("Seçenek güncelleme hatası:", err);
@@ -350,7 +350,6 @@ const getProductOptions = (req, res) => {
     SELECT 
       o.id,
       o.name,
-      o.description,
       o.type,
       po.is_required,
       po.created_at

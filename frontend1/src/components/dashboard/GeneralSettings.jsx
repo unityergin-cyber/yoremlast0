@@ -124,7 +124,8 @@ const GeneralSettings = () => {
                     <div className="settings-item-info">
                       <h4 className="settings-item-title">Ürün Seçenekleri</h4>
                       <p className="settings-item-desc">
-                        Ürünlere seçenek ekleme özelliğini aktif eder (Örn: Büyük Boy, Ekstra SoWWDEWDs)
+                        Ürünlere seçenek ekleme özelliğini aktif eder (Örn: Büyük Boy, Ekstra)
+                        
                       </p>
                     </div>
                     <label className="toggle-switch">

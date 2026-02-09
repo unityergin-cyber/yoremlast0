@@ -314,7 +314,7 @@ const handleSiparisTamamlaButton = async () => {
     // 4. Mahalle minimum sipariş tutarını kontrol et
     const guncelToplamStr = await hesaplaToplam();
     const sepetToplami = parseFloat(guncelToplamStr || '0');
-    const mahalleMinTutar = parseFloat(seciliAdres.min_order_amount || 0);
+    const mahalleMinTutar = parseFloat(seciliAdres.min_order_amount || seciliAdres.minimum_order_amount ||  0);
     
     console.log("Mahalle minimum tutarı:", mahalleMinTutar);
     console.log("Sepet toplamı:", sepetToplami);

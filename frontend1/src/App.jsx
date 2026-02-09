@@ -31,7 +31,7 @@ import EditSlider from "./components/dashboard/ADD/EditSlider";
 import AdminLocations from "./components/dashboard/AdminLocations";
 import AdminWorkingHours from "./components/dashboard/AdminWorkingHours";
 import ProductOptionsManagement from "./components/dashboard/ProductOptionsManagement";
-import AssignProductOptions from "./components/dashboard/AssignProductOptions";
+
 
 const App = () => {
   return (
@@ -46,11 +46,6 @@ const App = () => {
       <Route path="/admin/product-options" element={
         <ProtectedRoute>
           <ProductOptionsManagement />
-        </ProtectedRoute>
-      } />
-      <Route path="/admin/assign-options" element={
-        <ProtectedRoute>
-          <AssignProductOptions />
         </ProtectedRoute>
       } />
       <Route path="/admin/dashboard" element={

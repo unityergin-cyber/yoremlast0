@@ -103,7 +103,6 @@ const ProductOptionsManagement = () => {
     setEditingOption(record);
     optionForm.setFieldsValue({
       name: record.name,
-      description: record.description,
       type: record.type,
     });
     setOptionModalVisible(true);
@@ -111,11 +110,16 @@ const ProductOptionsManagement = () => {
 
   const handleSubmitOption = async (values) => {
     try {
+      const submitData = {
+        name: values.name,
+        type: values.type
+      };
+
       if (editingOption) {
-        await api.put(`/api/options/${editingOption.id}`, values);
+        await api.put(`/api/options/${editingOption.id}`, submitData);
         message.success('Seçenek başarıyla güncellendi');
       } else {
-        await api.post('/api/options', values);
+        await api.post('/api/options', submitData);
         message.success('Seçenek başarıyla eklendi');
       }
       setOptionModalVisible(false);
@@ -385,18 +389,25 @@ const ProductOptionsManagement = () => {
             footer={null}
           >
             <Form form={optionForm} layout="vertical" onFinish={handleSubmitOption}>
-              <Form.Item name="name" label="Seçenek Adı" rules={[{ required: true, message: 'Seçenek adı zorunludur' }]}>
+              <Form.Item 
+                name="name" 
+                label="Seçenek Adı" 
+                rules={[{ required: true, message: 'Seçenek adı zorunludur' }]}
+              >
                 <Input placeholder="Örn: Boyut" />
               </Form.Item>
-              <Form.Item name="description" label="Açıklama">
-                <Input.TextArea rows={3} placeholder="Seçenek hakkında kısa açıklama" />
-              </Form.Item>
-              <Form.Item name="type" label="Tür" rules={[{ required: true, message: 'Tür zorunludur' }]}>
+              
+              <Form.Item 
+                name="type" 
+                label="Tür" 
+                rules={[{ required: true, message: 'Tür zorunludur' }]}
+              >
                 <Select placeholder="Seçim türü">
                   <Option value="single">Tekli Seçim</Option>
                   <Option value="multiple">Çoklu Seçim</Option>
                 </Select>
               </Form.Item>
+              
               <Button type="primary" htmlType="submit" block>
                 {editingOption ? 'Güncelle' : 'Ekle'}
               </Button>

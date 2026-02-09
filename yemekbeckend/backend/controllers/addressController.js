@@ -222,7 +222,8 @@ exports.updateAddress = async (req, res) => {
     return res.status(401).json({ error: "Yetkisiz erişim." });
   }
   
-  const { title, city, district, neighborhood, street, address_detail, is_default } = req.body;
+  // ✅ address_description ekledim
+  const { title, city, district, neighborhood, street, address_detail, address_description, is_default } = req.body;
   
   if (!id) {
     return res.status(400).json({ error: "Adres ID'si zorunludur." });
@@ -251,10 +252,12 @@ exports.updateAddress = async (req, res) => {
       });
     }
 
+    // ✅ SQL sorgusuna address_description ekledim
     const query = user_type === "registered"
-      ? "UPDATE addresses SET title = ?, city = ?, district = ?, neighborhood = ?, street = ?, address_detail = ?, is_default = ? WHERE id = ? AND user_id = ?"
-      : "UPDATE addresses SET title = ?, city = ?, district = ?, neighborhood = ?, street = ?, address_detail = ?, is_default = ? WHERE id = ? AND guest_id = ?";
+      ? "UPDATE addresses SET title = ?, city = ?, district = ?, neighborhood = ?, street = ?, address_detail = ?, address_description = ?, is_default = ? WHERE id = ? AND user_id = ?"
+      : "UPDATE addresses SET title = ?, city = ?, district = ?, neighborhood = ?, street = ?, address_detail = ?, address_description = ?, is_default = ? WHERE id = ? AND guest_id = ?";
 
+    // ✅ values dizisine address_description ekledim
     const values = [
       title,
       city,
@@ -262,6 +265,7 @@ exports.updateAddress = async (req, res) => {
       neighborhood,
       street,
       address_detail || null,
+      address_description || null,  // ← YENİ
       is_default ? 1 : 0,
       id,
       user_type === "registered" ? user_id : guest_id
